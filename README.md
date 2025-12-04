@@ -1,4 +1,4 @@
-# pDMPcaller
+# MultiDMPcaller
 DNA甲基化差异位点（DMP）/差异区域（DMR）识别工具，支持CpG/CHH/CHG类型分析。
 
 ## 环境配置
@@ -11,7 +11,7 @@ pip install -r requirements.txt
 2. 运行核心代码：
 ```bash
 cd src
-python pDMPcaller.py
+python MultiDMPcaller.py
 ```
 3. 按提示输入数据目录、样本数、生物类型（0=动物/1=植物/2=不过滤）即可。
 
