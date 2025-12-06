@@ -1,43 +1,51 @@
-## 简介
-MultiDMPcaller 是一款用于分析两组样本（如突变型vs野生型）之间甲基化差异区域（DMR）的工具，支持CpG、CHH、CHG三种甲基化类型的分析，最终输出显著差异的DMR区域及统计信息。
+## Introduction  
+MultiDMPcaller is a tool for analyzing differentially methylated regions (DMRs) between two groups of samples (e.g., mutant vs wild-type). It supports the analysis of three methylation types (CpG, CHH, and CHG) and outputs significantly differential DMR regions along with statistical information.  
 
-## 环境配置
+
+## Environment Setup  
 ```bash
 pip install -r requirements.txt
-```
+```  
 
-## 运行方式
-### 数据文件格式
-1. **文件命名规则**  
-   - 样本文件需放在两个目录中（如`msv`和`wt`，目录名可自定义）
-   - 文件名格式：`{样本序号}-{目录名}.txt`  
-     示例：`1-msv.txt`（第一组第一个样本）、`2-wt.txt`（第二组第二个样本）
 
-   **文件内容格式**  
-   无表头，每行代表一个甲基化位点，用空格或制表符分隔，共5列：
+## Running Instructions  
+
+### Data File Format  
+1. **File Naming Rules**  
+   - Sample files must be placed in two directories (e.g., `msv` and `wt`; directory names can be customized).  
+   - File name format: `{sample index}-{directory name}.txt`  
+     Examples: `1-msv.txt` (first sample in the first group), `2-wt.txt` (second sample in the second group).  
+
+   **File Content Format**  
+   No header. Each line represents a methylation site, separated by spaces or tabs, with 5 columns:  
    ```
-   染色体号  位点号  甲基化读段数  非甲基化读段数  甲基化类型（CpG/CHH/CHG）
-   ```
-   示例内容：
+   Chromosome number  Position number  Methylated read count  Unmethylated read count  Methylation type (CpG/CHH/CHG)
+   ```  
+   Example content:  
    ```
    1  1005  23  5  CpG
    1  1030  18  9  CHH
    2  5002  7  32  CHG
-   ```
-2. 运行核心代码：
+   ```  
+
+2. Run the core code:  
 ```bash
 python MultiDMPcaller.py
-```
-3. 按提示输入数据目录、样本数、生物类型（0=动物/1=植物/2=不过滤）即可。
+```  
 
-## 示例数据
-`msv/1-msv.txt`,`wt/1-wt.txt` 为测试数据，包含基础甲基化位点格式，可直接用于测试运行。
+3. Follow the prompts to input the data directories, number of samples, and biological type (0=animal / 1=plant / 2=no filtering).  
 
-## 输出结果
-分析结果保存在工作目录下的`and_output`文件夹中，核心结果文件为：
-- `{甲基化类型}-final_significant_regions_DMRs.txt`：按甲基化类型分类的显著DMR区域，包含染色体位置、长度、甲基化水平、显著性概率等信息。
 
-## 注意事项
-1. 确保样本目录名称与文件命名中的前缀一致（如`msv`目录下的文件均为`x-msv.txt`）。
-2. 样本数量需与目录下的文件数量严格一致（如输入样本数为3，则目录下必须有3个文件）。
-3. 若某甲基化类型无有效数据，程序会自动跳过并提示，不影响其他类型的分析。
+## Example Data  
+`msv/1-msv.txt` and `wt/1-wt.txt` are test data files, containing basic methylation site formats, which can be directly used for test runs.  
+
+
+## Output Results  
+Analysis results are saved in the `and_output` folder in the working directory. The core result files include:  
+- `{methylation type}-final_significant_regions_DMRs.txt`: Significantly differential DMR regions classified by methylation type, including information such as chromosomal location, length, methylation level, and significance probability.  
+
+
+## Notes  
+1. Ensure that the directory names are consistent with the prefixes in the file names (e.g., all files in the `msv` directory must be named `x-msv.txt`).  
+2. The number of samples must strictly match the number of files in the directory (e.g., if 3 samples are input, there must be exactly 3 files in the directory).  
+3. If there is no valid data for a specific methylation type, the program will automatically skip it and prompt a message without affecting the analysis of other types.
