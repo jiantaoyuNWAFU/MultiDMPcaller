@@ -3351,16 +3351,16 @@ def main():
 
     try:
         # 获取命令行参数
-        # m = int(sys.argv[2])
-        # n = int(sys.argv[1])
-        # dir1 = sys.argv[4]
-        # dir2 = sys.argv[3]
-        # biotype = int(sys.argv[5])
-        dir1 = input("请输入第一个样本目录名：").strip()
-        dir2 = input("请输入第二个样本目录名：").strip()
-        m = int(input("请输入第一个目录的组数 (m)："))
-        n = int(input("请输入第二个目录的组数 (n)："))
-        biotype = int(input("请输入所给基因型源自的生物类型（0-动物，1-植物，2-不过滤）"))
+        m = int(sys.argv[2])
+        n = int(sys.argv[1])
+        dir1 = sys.argv[4]
+        dir2 = sys.argv[3]
+        biotype = int(sys.argv[5])
+        #dir1 = input("请输入第一个样本目录名：").strip()
+        #dir2 = input("请输入第二个样本目录名：").strip()
+        #m = int(input("请输入第一个目录的组数 (m)："))
+        #n = int(input("请输入第二个目录的组数 (n)："))
+        #biotype = int(input("请输入所给基因型源自的生物类型（0-动物，1-植物，2-不过滤）"))
 
     # 因为目录名随便输都行，不会出现错误的情况，所以如果错了就肯定是组数m,n输入错了
     except ValueError:
