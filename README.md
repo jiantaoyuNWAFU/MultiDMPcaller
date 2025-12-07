@@ -27,17 +27,25 @@ pip install -r requirements.txt
    1  1030  18  9  CHH
    2  5002  7  32  CHG
    ```  
-
-2. Run the core code:  
+### Run via Command-Line Arguments  
 ```bash
-python MultiDMPcaller.py
+python MultiDMPcaller.py <m> <n> <dir1> <dir2> <biotype>
 ```  
 
-3. Follow the prompts to input the data directories, number of samples, and biological type (0=animal / 1=plant / 2=no filtering).  
+#### Parameter Description (in order):
+1. `<m>`: Number of samples in the first group's directory  
+2. `<n>`: Number of samples in the second group's directory  
+3. `<dir1>`: Directory name of the first group of samples (e.g., `wt` in the example)  
+4. `<dir2>`: Directory name of the second group of samples (e.g., `msv` in the example)  
+5. `<biotype>`: Biological type (`0`=animal / `1`=plant / `2`=no filtering)  
 
 
-## Example Data  
-`msv/1-msv.txt` and `wt/1-wt.txt` are test data files, containing basic methylation site formats, which can be directly used for test runs.  
+### Example Run (with Test Data)  
+Using the test data included in the repository ( `wt/1-wt.txt`,`msv/1-msv.txt`), the running command is:  
+```bash
+python MultiDMPcaller.py 1 1 wt msv 1
+```  
+(Explanation: Number of samples in the second group = 1, number of samples in the first group = 1, first group directory = wt, second group directory = msv, biological type = plant)
 
 
 ## Output Results  
