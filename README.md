@@ -9,7 +9,7 @@ pip install -r requirements.txt
 
 ## Running Instructions  
 
-### Data File Format  
+### 1. Data File Format  
 1. **File Naming Rules**  
    - Sample files must be placed in two directories (e.g., `msv` and `wt`; directory names can be customized).
    - File name format: `{sample index}-{directory name}.txt`
@@ -19,39 +19,56 @@ pip install -r requirements.txt
    No header. Each line represents a methylation site, separated by spaces or tabs,with exactly 5 columns:  
    ```text
    Chromosome   Position   Methylated_reads   Unmethylated_reads   Context
-Note: The program is highly robust with chromosome naming. Both numeric formats (e.g., 1, 2) and prefix formats (e.g., chr1, Chr2) are fully supported and will be automatically normalized.
-   ```  
-   Example content:  
    ```
+   > **Note:** The program is highly robust with chromosome naming. Both numeric formats (e.g., `1`, `2`) and prefix formats (e.g., `chr1`, `Chr2`) are fully supported and will be automatically normalized.
+   **Example Content:**
+   ```text
    chr1  1005  23  5   CpG
    chr1  1030  18  9   CHH
    chr2  5002  7   32  CHG
-   ```  
-### Run via Command-Line Arguments  
+   ```
+
+### 2. Run via Command-Line Arguments  
 ```bash
 python MultiDMPcaller.py <n> <m> <dir_wt> <dir_mut> <biotype>
 ```  
 
 #### Parameter Description (in order):
-1. <n>: Number of samples in the wild-type (WT) group.
-2. <m>: Number of samples in the mutant group.  
-3. <dir_wt>: Directory name of the wild-type group (e.g., wt).  
-4. <dir_mut>: Directory name of the mutant group (e.g., msv).  
-5. <biotype>: Biological type filtering logic (0 = animal / 1 = plant / 2 = no filtering).  
+| Parameter | Description |
+| :--- | :--- |
+| `<n>` | Number of replicates in the **Wild-type (WT)** group |
+| `<m>` | Number of replicates in the **Mutant** group |
+| `<dir_wt>` | Directory name of the WT group (e.g., `wt`) |
+| `<dir_mut>` | Directory name of the Mutant group (e.g., `msv`) |
+| `<biotype>` | Biological filter: `0`=Animal, `1`=Plant, `2`=No filter |
 
 
-### Example Run (with Test Data)  
-Using the test data included in the repository ( `wt/1-wt.txt`,`msv/1-msv.txt`), the running command is:  
+
+### 3. Example Run (with Test Data)  
+To analyze **1 Wild-type replicate** (in `wt/`) and **1 Mutant replicate** (in `msv/`) for a **plant** genome:
 ```bash
 python MultiDMPcaller.py 1 1 wt msv 1
 ```  
-(Explanation: 1 wild-type sample, 1 mutant sample, wild-type directory is wt, mutant directory is msv, biological type is plant) .
+**Explanation:**
+- `n=1`: 1 WT replicate.
+- `m=1`: 1 Mutant replicate.
+- `dir_wt=wt`: WT files are in `wt/`.
+- `dir_mut=msv`: Mutant files are in `msv/`.
+- `biotype=1`: Plant mode.
+
 
 ## Output Results  
-Analysis results are saved in the `and_output` folder within the working directory. For user convenience, the core results are provided in both **.txt** (tab-separated) and **.csv** (comma-separated) formats, which can be easily opened in Excel or R.
-The core files include:
-- `{methylation type}-final_significant_sites_DMPs.csv / .txt`: Significantly differential methylation positions (DMPs) across all replicate combinations, including exact chromosomal positions, methylation change direction, and statistical significance (Q-values).
-- `{methylation type}-final_significant_regions_DMRs.csv / .txt`: Significantly differential DMR regions classified by methylation context, including information such as chromosomal boundaries, length, average methylation levels, and significance probability.
+Analysis results are saved in the `and_output` folder within the working directory. 
+The core results are provided in both **.txt** (tab-separated) and **.csv** (comma-separated) formats.
+
+**Core Files:**
+*   **`{context}-final_significant_sites_DMPs.csv / .txt`**
+    *   Contains significantly differential methylation positions (DMPs) across replicate combinations.
+    *   Includes: Chromosomal positions, methylation change direction, and statistical significance (Q-values).
+
+*   **`{context}-final_significant_regions_DMRs.csv / .txt`**
+    *   Contains significantly differential DMR regions classified by methylation context.
+    *   Includes: Chromosomal boundaries, length, average methylation levels, and significance probability.
 
 
 ## Notes  
