@@ -75,3 +75,6 @@ The core results are provided in both **.txt** (tab-separated) and **.csv** (com
 1. Ensure that the directory names are consistent with the prefixes in the file names (e.g., all files in the `msv` directory must be named `x-msv.txt`).  
 2. The number of samples must strictly match the number of files in the directory (e.g., if 3 samples are input, there must be exactly 3 files in the directory).  
 3. If there is no valid data for a specific methylation type, the program will automatically skip it and prompt a message without affecting the analysis of other types.
+
+## Cite MultiDMPcaller
+Yuan Q., Zhao H., Zhang Z., Yue C., Zhang B., Zou Q. and Yu J. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (under review).
