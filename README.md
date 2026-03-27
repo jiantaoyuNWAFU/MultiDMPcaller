@@ -77,4 +77,7 @@ The core results are provided in both **.txt** (tab-separated) and **.csv** (com
 3. If there is no valid data for a specific methylation type, the program will automatically skip it and prompt a message without affecting the analysis of other types.
 
 ## Cite MultiDMPcaller
+If you use MultiDMPcaller, please cite
+```text
 Yuan Q., Zhao H., Zhang Z., Yue C., Zhang B., Zou Q. and Yu J. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (under review).
+   ```
