@@ -2,6 +2,7 @@
    MultiDMPcaller is a comprehensive tool designed for analyzing both **Differentially Methylated Positions (DMPs)** and **Differentially Methylated Regions (DMRs)** between two groups of samples (e.g., mutant vs. wild-type). It systematically supports the analysis of three cytosine methylation contexts (CpG, CHH, and CHG) and outputs significantly differential sites and regions along with detailed statistical metrics.
 
 ## Environment Setup  
+**Prerequisites:** Python 3.8 or higher.
 ```bash
 pip install -r requirements.txt
 ```  
@@ -55,7 +56,7 @@ python MultiDMPcaller.py 1 1 wt mut 1
 - `dir_wt=wt`: WT files are in `wt/`.
 - `dir_mut=mut`: Mutant files are in `mut/`.
 - `biotype=1`: Plant mode.
-
+**Expected Time:** Running this example with the provided toy dataset takes about 10 minutes on a standard laptop.
 
 ## Output Results  
 Analysis results are saved in the `and_output` folder within the working directory. 
