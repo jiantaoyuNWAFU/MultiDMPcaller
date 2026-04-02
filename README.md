@@ -49,7 +49,8 @@ python MultiDMPcaller.py <n> <m> <dir_wt> <dir_mut> <biotype>
 
 
 ### 3. Example Run (with Test Data)  
-> **Dataset Note:** To keep the download size manageable and the execution time reasonable, the provided toy dataset is a subset containing only **CpG context data for Chromosome 1**. 
+> **Dataset Note:** To keep the download size manageable and the execution time reasonable, the provided toy dataset is a subset containing only **CpG context data for Chromosome 1**.
+
 > **Expected Time:** Running this example with the provided toy dataset takes approximately 35 minutes on a standard laptop.
 
 To analyze **1 Wild-type replicate** (in `wt/`) and **1 Mutant replicate** (in `mut/`) for a **plant** genome:
