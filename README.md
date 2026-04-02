@@ -22,7 +22,9 @@ pip install -r requirements.txt
    Chromosome   Position   Methylated_reads   Unmethylated_reads   Context
    ```
    > **Note:** The program is highly robust with chromosome naming. Both numeric formats (e.g., `1`, `2`) and prefix formats (e.g., `chr1`, `Chr2`) are fully supported and will be automatically normalized.
+   
    > **Context Automation:** You do **NOT** need to manually separate the data by methylation context. Simply provide all data in a single file per sample, and MultiDMPcaller will automatically extract, group, and sequentially process the CpG, CHG, and CHH contexts.
+
    **Example Content:**
    ```text
    chr1  1005  23  5   CpG
@@ -65,7 +67,17 @@ python MultiDMPcaller.py 1 1 wt mut 1
 ## Output Results  
 Analysis results are saved in the `and_output` folder within the working directory. 
 The core results are provided in both **.txt** (tab-separated) and **.csv** (comma-separated) formats.
-It generates comprehensive output files for both DMPs and DMRs. Below are examples of the core result files generated from the toy dataset.
+
+**Core Files:**
+*   **`{context}-final_significant_sites_DMPs.csv / .txt`**
+    *   Contains significantly differential methylation positions (DMPs) across replicate combinations.
+    *   Includes: Chromosomal positions, methylation change direction, and statistical significance (Q-values).
+
+*   **`{context}-final_significant_regions_DMRs.csv / .txt`**
+    *   Contains significantly differential DMR regions classified by methylation context.
+    *   Includes: Chromosomal boundaries, length, average methylation levels, and significance probability.
+
+Below are examples of the core result files generated from the toy dataset.
 
 **1. Differentially Methylated Positions (DMPs)**
 File: `CpG-final_significant_sites_DMPs.txt` (or `.csv`)
@@ -86,16 +98,6 @@ File: `CpG-final_significant_regions_DMRs.txt` (or `.csv`)
 | chr1 | CpG | 120901 | 123000 | 2100 | 0 | 1 | 1 | 1.0 | 794.0 | 730.0 | 852.0 | 572.0 | 4.74e-05 | 4.74e-05 |
 
 *(Note: `Direction` 1 indicates hyper-methylation, and 0 indicates hypo-methylation.)*
-
-**Core Files:**
-*   **`{context}-final_significant_sites_DMPs.csv / .txt`**
-    *   Contains significantly differential methylation positions (DMPs) across replicate combinations.
-    *   Includes: Chromosomal positions, methylation change direction, and statistical significance (Q-values).
-
-*   **`{context}-final_significant_regions_DMRs.csv / .txt`**
-    *   Contains significantly differential DMR regions classified by methylation context.
-    *   Includes: Chromosomal boundaries, length, average methylation levels, and significance probability.
-
 
 ## Notes  
 1. Ensure that the directory names are consistent with the prefixes in the file names (e.g., all files in the `mut` directory must be named `x-mut.txt`).  
