@@ -3389,16 +3389,16 @@ def main():
 
     try:
         # Get command line arguments
-        # m = int(sys.argv[2])
-        # n = int(sys.argv[1])
-        # dir1 = sys.argv[4]
-        # dir2 = sys.argv[3]
-        # biotype = int(sys.argv[5])
-        dir2 = input("Please enter the wild-type sample directory name:").strip()
-        dir1 = input("Please enter the mutant-type sample directory name:").strip()
-        n = int(input("Please enter the number of wild-type groups (n):"))
-        m = int(input("Please enter the number of mutant-type groups (m):"))
-        biotype = int(input("Please enter the biological type of the given genotypes (0-Animal, 1-Plant, 2-No filter):"))
+        m = int(sys.argv[2])
+        n = int(sys.argv[1])
+        dir1 = sys.argv[4]
+        dir2 = sys.argv[3]
+        biotype = int(sys.argv[5])
+        # dir2 = input("Please enter the wild-type sample directory name:").strip()
+        # dir1 = input("Please enter the mutant-type sample directory name:").strip()
+        # n = int(input("Please enter the number of wild-type groups (n):"))
+        # m = int(input("Please enter the number of mutant-type groups (m):"))
+        # biotype = int(input("Please enter the biological type of the given genotypes (0-Animal, 1-Plant, 2-No filter):"))
 
     # Since directory names can be entered freely without triggering errors, a ValueError here definitely means the group numbers m or n were entered incorrectly
     except ValueError:
