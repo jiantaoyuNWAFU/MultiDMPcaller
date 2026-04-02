@@ -14,7 +14,7 @@ pip install -r requirements.txt
 1. **File Naming Rules**  
    - Sample files must be placed in two directories (e.g., `mut` and `wt`; directory names can be customized).
    - File name format: `{sample index}-{directory name}.txt`
-     Examples: 1-mut.txt (first sample in the mutant group), 2-wt.txt (second sample in the wild-type group).
+     Examples: 1-mut.txt (first sample in the mutant group), 2-mut.txt (second sample in the mutant group), 1-wt.txt (first sample in the wild-type group), 2-wt.txt (second sample in the wild-type group).
 
    **File Content Format**  
    No header. Each line represents a methylation site, separated by spaces or tabs,with exactly 5 columns:  
