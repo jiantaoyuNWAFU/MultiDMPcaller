@@ -113,5 +113,5 @@ File: `CpG-final_significant_regions_DMRs.txt` (or `.csv`)
 ## Cite MultiDMPcaller
 If you use MultiDMPcaller, please cite
 ```text
-Yuan Q., Zhao H., Zhang Z., Yue C., Zhang B., Zou Q. and Yu J. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (under review).
+Yuan Q#., Zhao H#., Zhang Z#., Yue C., Zhang B., Zou Q. and Yu J*. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (under review).
    ```
