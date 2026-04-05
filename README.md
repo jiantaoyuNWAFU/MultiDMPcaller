@@ -69,6 +69,11 @@ python MultiDMPcaller.py 1 1 wt mut 1
 Analysis results are saved in the `and_output` folder within the working directory. 
 The core results are provided in both **.txt** (tab-separated) and **.csv** (comma-separated) formats.
 
+The names of the text files containing finalDMPs and finalDMRs, as well as their corresponding visualization images (taking the CHG context as an example), are as follows:
+* `and_output/CHG-final_significant_sites_DMPs.csv`
+* `and_output/CHG-final_significant_regions_DMRs.csv`
+* `and_output/common_sites_plot_CHG_all_chromosomes.png`
+
 **Core Files:**
 *   **`{context}-final_significant_sites_DMPs.csv / .txt`**
     *   Contains significantly differential methylation positions (DMPs) across replicate combinations.
