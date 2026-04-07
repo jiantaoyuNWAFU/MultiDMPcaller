@@ -73,18 +73,19 @@ python MultiDMPcaller.py 1 1 test_data/wt test_data/mut 1
 To reproduce the full-genome analysis and visualization plots presented in our paper, we provide the complete benchmark dataset (e.g., `epiF3` mutant vs. Wild-type). Due to GitHub's file size limits, this dataset is hosted externally.
 
 **Step 1: Download the Dataset**
-Please download the complete dataset archive from our data repository:
-* **Download Link:** [NWAFU Cloud Drive - MultiDMPcaller Benchmark Data](https://pan.nwafu.edu.cn/share/fcfeff0bc2551f0868022bb94f)
+Please download the complete dataset archive (`MultiDMPcaller_BenchMark_Data.zip`) from our data repository:
+* **Download Link:** [NWAFU Cloud Drive - MultiDMPcaller Benchmark Data](https://pan.nwafu.edu.cn/share/febe361e23bee044f3394b8138)
 
 **Step 2: Setup the Directories**
-Extract the downloaded archive and place the `wt` and `mut` directories directly into the root directory of the MultiDMPcaller project. The directory structure should look exactly like this:
+Unzip the downloaded `MultiDMPcaller_BenchMark_Data.zip` file. Place the extracted `wt` and `mut` directories directly into the root directory of the MultiDMPcaller project. The directory structure should look exactly like this:
 ```text
 MultiDMPcaller/
 ├── MultiDMPcaller.py
-├── mut/ (from cloud drive)
+├── test_data/   (built-in toy dataset)
+├── mut/         (extracted from the zip file)
 │   ├── 1-mut.txt
 │   └── 2-mut.txt
-└── wt/  (from cloud drive)
+└── wt/          (extracted from the zip file)
     ├── 1-wt.txt
     └── 2-wt.txt
 ```
@@ -93,7 +94,7 @@ MultiDMPcaller/
 Execute the following command in your terminal to analyze **2 Wild-type replicates** and **2 Mutant replicates** using the **plant** filtering mode (`1`):
 ```bash
 python MultiDMPcaller.py 2 2 wt mut 1
-```  
+```
 
 **Explanation of the command:**
 - `<n>=2`: 2 WT replicates.
