@@ -48,21 +48,61 @@ python MultiDMPcaller.py <n> <m> <dir_wt> <dir_mut> <biotype>
 
 
 
-### 3. Example Run (with Test Data)  
-> **Dataset Note:** To keep the download size manageable and the execution time reasonable, the provided toy dataset is a subset containing only **CpG context data for Chromosome 1**.
+### 3. Example Runs
 
-> **Expected Time:** Running this example with the provided toy dataset takes approximately 35 minutes on a standard laptop.
+We provide two ways to run the software: a quick test to verify your environment, and a full-genome benchmark to reproduce the results from our paper.
 
-To analyze **1 Wild-type replicate** (in `wt/`) and **1 Mutant replicate** (in `mut/`) for a **plant** genome:
+#### 3.1 Quick Start (with Built-in Toy Dataset)
+To quickly test if the software is correctly installed, we provide a small built-in toy dataset (containing only CpG context data for Chromosome 1) in the `test_data/` directory of this repository.
+
+Execute the following command to run a 1 vs 1 comparison:
 ```bash
-python MultiDMPcaller.py 1 1 wt mut 1
+python MultiDMPcaller.py 1 1 test_data/wt test_data/mut 1
+```
+
+**Explanation of the command:**
+- `<n>=1`: 1 WT replicate.
+- `<m>=1`: 1 Mutant replicate.
+- `<dir_wt>=test_data/wt`: Path to the WT group directory.
+- `<dir_mut>=test_data/mut`: Path to the Mutant group directory.
+- `<biotype>=1`: Plant mode (optimizes FDR correction for CHG and CHH contexts).
+
+> **Expected Time:** It takes about 35 minutes on a standard laptop.
+
+#### 3.2 Reproduce Paper Results (with Full Benchmark Dataset)
+To reproduce the full-genome analysis and visualization plots presented in our paper, we provide the complete benchmark dataset (e.g., `epiF3` mutant vs. Wild-type). Due to GitHub's file size limits, this dataset is hosted externally.
+
+**Step 1: Download the Dataset**
+Please download the complete dataset archive from our data repository:
+* **Download Link:** [NWAFU Cloud Drive - MultiDMPcaller Benchmark Data](https://pan.nwafu.edu.cn/share/fcfeff0bc2551f0868022bb94f)
+
+**Step 2: Setup the Directories**
+Extract the downloaded archive and place the `wt` and `mut` directories directly into the root directory of the MultiDMPcaller project. The directory structure should look exactly like this:
+```text
+MultiDMPcaller/
+├── MultiDMPcaller.py
+├── mut/ (from cloud drive)
+│   ├── 1-mut.txt
+│   └── 2-mut.txt
+└── wt/  (from cloud drive)
+    ├── 1-wt.txt
+    └── 2-wt.txt
+```
+
+**Step 3: Run the Analysis**
+Execute the following command in your terminal to analyze **2 Wild-type replicates** and **2 Mutant replicates** using the **plant** filtering mode (`1`):
+```bash
+python MultiDMPcaller.py 2 2 wt mut 1
 ```  
-**Explanation:**
-- `n=1`: 1 WT replicate.
-- `m=1`: 1 Mutant replicate.
-- `dir_wt=wt`: WT files are in `wt/`.
-- `dir_mut=mut`: Mutant files are in `mut/`.
-- `biotype=1`: Plant mode.
+
+**Explanation of the command:**
+- `<n>=2`: 2 WT replicates.
+- `<m>=2`: 2 Mutant replicates.
+- `<dir_wt>=wt`: Path to the WT group directory.
+- `<dir_mut>=mut`: Path to the Mutant group directory.
+- `<biotype>=1`: Plant mode (optimizes FDR correction for CHG and CHH contexts).
+
+> **Expected Time:** Processing this full-genome dataset involves tens of millions of cytosine sites and extensive pairwise comparisons. It takes several hours on a standard machine.
 
 
 ## Output Results  
