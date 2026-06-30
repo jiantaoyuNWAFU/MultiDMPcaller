@@ -164,7 +164,8 @@ python MultiDMPcaller.py \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
-  --auto-dmr-vote-threshold
+  --auto-dmr-vote-threshold \
+  --dmp-lowdiff-strict-vote-report-only
 ```
 
 ### 4.3 Standard animal WGBS analysis
@@ -182,7 +183,8 @@ python MultiDMPcaller.py \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
-  --auto-dmr-vote-threshold
+  --auto-dmr-vote-threshold \
+  --dmp-lowdiff-strict-vote-report-only
 ```
 
 ### 4.4 DMP-only analysis
