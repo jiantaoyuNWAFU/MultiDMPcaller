@@ -27,20 +27,20 @@ from matplotlib.patches import Patch
 from matplotlib import colors as mcolors
 from scipy.ndimage import gaussian_filter1d
 
-# DMP的Q值显著性阈值配置
+# DMP q-value significance threshold configuration
 DMP_QVALUE_THRESHOLDS = {
     'CpG': 0.05,
     'CHH': 0.045,
     'CHG': 0.04,
 }
 
-# DMR的Q值显著性阈值
+# DMR q-value significance threshold
 DMR_QVALUE_THRESHOLD = 0.05
 
-# 最终DMP/DMR跨replicate组合投票阈值；默认2/3，兼容原代码行为
+# Final DMP/DMR voting threshold across replicate combinations; defaults to 2/3 for backward compatibility
 VOTE_THRESHOLD = 2 / 3
 
-# 自动估计 DMP/DMR 投票阈值。默认关闭，保证不传新参数时完全沿用 --vote-threshold。
+# Automatically estimate DMP/DMR voting thresholds. Disabled by default so --vote-threshold is preserved when no new option is provided.
 AUTO_DMP_VOTE_THRESHOLD = False
 AUTO_DMR_VOTE_THRESHOLD = False
 AUTO_VOTE_THRESHOLD_REPORT_ONLY = False
@@ -69,12 +69,12 @@ DMP_LOWDIFF_CUTOFF = 0.3
 DMP_LOWDIFF_STRICT_VOTE_REPORT_ONLY = False
 
 def get_dmp_threshold(methylation_type):
-    """获取指定甲基化类型的DMP Q值阈值"""
+    """Return the DMP q-value threshold for the specified methylation type."""
     return DMP_QVALUE_THRESHOLDS.get(methylation_type, 0.05)
 
 
 def calc_meth_diff(m1, u1, m2, u2):
-    """计算两个样本之间的绝对甲基化水平差异，范围为0-1。"""
+    """Calculate the absolute methylation-level difference between two samples; the range is 0-1."""
     total1 = m1 + u1
     total2 = m2 + u2
     ratio1 = m1 / total1 if total1 > 0 else 0
@@ -86,7 +86,7 @@ def calc_meth_diff(m1, u1, m2, u2):
 # Mianjifa auto-methdiff module (embedded, no GUI)
 # Adapted from mianjifa_automethdiff.py. It only:
 #   1) estimates one global abs(methdiff) threshold from pairwise DMP distributions;
-#   2) saves m×n MethDiff distribution plots for each methylation context.
+#   2) saves mxn MethDiff distribution plots for each methylation context.
 # It does not modify pairwise Fisher/FDR logic.
 # =========================================================
 AUTO_METHDIFF_X_MIN = -1.0
@@ -136,11 +136,11 @@ def _mianjifa_parse_output_pair(output_dir_name: str):
     """Parse output_wt1_mut2-like folders into group/replicate labels."""
     name = output_dir_name
     if not name.lower().startswith("output_"):
-        raise ValueError(f"不是 output_ 开头的文件夹名：{name}")
+        raise ValueError(f"Folder name does not start with output_: {name}")
     body = name[len("output_"):]
     m = re.match(r"^(.+?)(\d+)[_-](.+?)(\d+)$", body)
     if not m:
-        raise ValueError(f"无法解析 output 文件夹名：{name}，期望格式类似 output_wt1_mut1")
+        raise ValueError(f"Cannot parse output folder name: {name}; expected a format like output_wt1_mut1")
     group1 = m.group(1)
     rep1 = int(m.group(2))
     group2 = m.group(3)
@@ -164,7 +164,7 @@ def _mianjifa_find_case_insensitive_dir(parent: Path, dirname: str) -> Path:
     for p in parent.iterdir():
         if p.is_dir() and p.name.lower() == dirname.lower():
             return p
-    raise FileNotFoundError(f"{parent} 下找不到原始组文件夹：{dirname}")
+    raise FileNotFoundError(f"{parent}  does not contain the original group folder: {dirname}")
 
 
 def _mianjifa_resolve_group_dir(selected_dir: Path, group_name: str, mut_dir: str, wt_dir: str) -> Path:
@@ -224,7 +224,7 @@ def _mianjifa_read_dmp_sites(dmp_file: Path) -> pd.DataFrame:
 def _mianjifa_load_dmp_sites_from_methylation_type_dir(methylation_type_dir: Path) -> pd.DataFrame:
     dmp_files = sorted([p for p in methylation_type_dir.glob("DMP*") if p.is_file()])
     if not dmp_files:
-        raise FileNotFoundError(f"{methylation_type_dir} 中没有找到 DMP* 文件")
+        raise FileNotFoundError(f"{methylation_type_dir}  contains no DMP* files")
     all_sites = []
     for dmp_file in dmp_files:
         sites = _mianjifa_read_dmp_sites(dmp_file)
@@ -250,11 +250,11 @@ def _mianjifa_load_q_significant_sites_from_fdr(methylation_type_dir: Path):
     )
     if not fdr_files:
         raise FileNotFoundError(
-            f"{methylation_type_dir} 中没有找到 FDR_corrected_results_*.txt"
+            f"{methylation_type_dir}  contains no FDR_corrected_results_*.txt"
         )
     if len(fdr_files) > 1:
         raise RuntimeError(
-            f"{methylation_type_dir} 中找到多个FDR文件，无法唯一确定："
+            f"{methylation_type_dir}  contains multiple FDR files; cannot determine a unique file: "
             f"{[p.name for p in fdr_files]}"
         )
 
@@ -264,13 +264,13 @@ def _mianjifa_load_q_significant_sites_from_fdr(methylation_type_dir: Path):
         if len(df.columns) < 6:
             df = pd.read_csv(fdr_file, sep=r"\s+", engine="python")
     except Exception as exc:
-        raise RuntimeError(f"读取FDR文件失败 {fdr_file}: {exc}") from exc
+        raise RuntimeError(f"Failed to read FDR file {fdr_file}: {exc}") from exc
 
     required = {"Chromosome", "Position", "Qvalue"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(
-            f"{fdr_file} 缺少必要列 {sorted(missing)}；实际列={list(df.columns)}"
+            f"{fdr_file} is missing required columns {sorted(missing)}; actual columns={list(df.columns)}"
         )
 
     qvalue = pd.to_numeric(df["Qvalue"], errors="coerce")
@@ -308,7 +308,7 @@ def _mianjifa_find_replicate_file(group_dir: Path, group_name: str, rep_id: int)
     """Find raw methylation input file for a replicate in a group directory."""
     candidates = sorted([p for p in group_dir.glob(f"{rep_id}-*.txt") if p.is_file()])
     if not candidates:
-        raise FileNotFoundError(f"{group_dir} 下找不到 {rep_id}-*.txt")
+        raise FileNotFoundError(f"{group_dir}  not found under  {rep_id}-*.txt")
 
     exact_name = f"{rep_id}-{group_name}.txt".lower()
     for p in candidates:
@@ -763,7 +763,7 @@ def _mianjifa_plot_one_methylation_type(
     )
     plt.savefig(output_png, dpi=300)
     plt.close()
-    print(f"已保存 auto-methdiff 图片：{output_png}")
+    print(f"Saved auto-methdiff plot: {output_png}")
     return summary_records
 
 
@@ -819,8 +819,8 @@ def estimate_mianjifa_auto_methdiff_threshold(
         }])
         out_file = output_path / "mianjifa_auto_methdiff_threshold_summary.tsv"
         summary_df.to_csv(out_file, sep="\t", index=False)
-        print(f"自动 methdiff 阈值估计失败：未找到 output_*_* 文件夹；回退到 {fallback}")
-        print(f"自动 methdiff 诊断表保存至: {out_file}")
+        print(f"Auto methdiff threshold estimation failed: no output_*_* folders found; falling back to {fallback}")
+        print(f"Auto methdiff diagnostic table saved to: {out_file}")
         return float(fallback), summary_df
 
     meth_types = _mianjifa_collect_methylation_types(output_dir_records)
@@ -836,11 +836,11 @@ def estimate_mianjifa_auto_methdiff_threshold(
         }])
         out_file = output_path / "mianjifa_auto_methdiff_threshold_summary.tsv"
         summary_df.to_csv(out_file, sep="\t", index=False)
-        print(f"自动 methdiff 阈值估计失败：未找到包含完整FDR表的甲基化类型目录；回退到 {fallback}")
-        print(f"自动 methdiff 诊断表保存至: {out_file}")
+        print(f"Auto methdiff threshold estimation failed: no methylation-context directories with complete FDR tables were found; falling back to {fallback}")
+        print(f"Auto methdiff diagnostic table saved to: {out_file}")
         return float(fallback), summary_df
 
-    print("\n估计 auto-methdiff 阈值：mianjifa q-significant raw MethDiff area-cut 方法")
+    print("\nEstimating the auto-methdiff threshold: mianjifa q-significant raw MethDiff area-cut method")
     print(f"  work_dir = {selected_dir}")
     print(f"  mut_dir = {mut_dir}")
     print(f"  wt_dir = {wt_dir}")
@@ -849,7 +849,7 @@ def estimate_mianjifa_auto_methdiff_threshold(
 
     all_summary = []
     for meth_type in meth_types:
-        print(f"\n正在处理 auto-methdiff 甲基化类型：{meth_type}")
+        print(f"\nProcessing auto-methdiff methylation context: {meth_type}")
         records = _mianjifa_plot_one_methylation_type(
             meth_type=meth_type,
             output_dir_records=output_dir_records,
@@ -896,8 +896,8 @@ def estimate_mianjifa_auto_methdiff_threshold(
     aggregate_tsv = output_path / "mianjifa_auto_methdiff_threshold_aggregate.tsv"
     aggregate_df.to_csv(aggregate_tsv, sep="\t", index=False)
 
-    print(f"自动 methdiff 诊断表保存至: {summary_tsv}")
-    print(f"自动 methdiff 聚合阈值表保存至: {aggregate_tsv}")
+    print(f"Auto methdiff diagnostic table saved to: {summary_tsv}")
+    print(f"Auto methdiff aggregate-threshold table saved to: {aggregate_tsv}")
     print(f"mianjifa auto-methdiff global abs threshold = {threshold:.6g} ({status})")
     return threshold, summary_df
 
@@ -1033,7 +1033,7 @@ def save_auto_qvalue_report(output_dir, replicate_x, replicate_y, methylation_ty
     out_file = os.path.join(output_dir, f"auto_qvalue_threshold_{methylation_type}_wt_replicate{replicate_y}_vs_mut_replicate{replicate_x}.tsv")
     pd.DataFrame([record]).to_csv(out_file, sep="\t", index=False)
 
-    print(f"    自动q-value阈值诊断表保存至: {out_file}")
+    print(f"    Auto q-value threshold diagnostic table saved to: {out_file}")
 
 # =========================================================
 # Auto q-value plotting module
@@ -1195,7 +1195,7 @@ def _autoq_read_pq_file(filepath):
             df["adj_p"] = pd.to_numeric(df["adj_p"], errors="coerce")
 
     except Exception as e:
-        print(f"  [auto-q plot] 读取失败 {filepath}: {e}")
+        print(f"  [auto-q plot] read failed {filepath}: {e}")
         return None, None, None
 
     df = df.dropna(subset=["p", "adj_p"])
@@ -1315,14 +1315,14 @@ def _autoq_save_max_diff_table(diff_cache, ordered_keys, display_name, save_dir)
         })
 
     if not rows:
-        print("  [auto-q plot] 没有 max-diff 结果可保存")
+        print("  [auto-q plot] no max-diff results to save")
         return None
 
     out_df = pd.DataFrame(rows)
     out_csv = os.path.join(save_dir, f"max_pvalue_adjustedP_diff_points_{len(rows)}comparisons.csv")
     out_df.to_csv(out_csv, index=False)
 
-    print(f"  [auto-q plot] max-diff 表保存至: {out_csv}")
+    print(f"  [auto-q plot] max-diff table saved to: {out_csv}")
     return out_csv
 
 
@@ -1423,7 +1423,7 @@ def _autoq_plot_fdr_panels(diff_cache, ordered_keys, display_name, color_pairs, 
     fig.savefig(save_path.replace(".png", ".pdf"), bbox_inches="tight")
     plt.close(fig)
 
-    print(f"  [auto-q plot] FDR panel 图保存至: {save_path}")
+    print(f"  [auto-q plot] FDR panel plot saved to : {save_path}")
     return save_path
 
 
@@ -1507,23 +1507,23 @@ def _autoq_plot_diff_panels(diff_cache, ordered_keys, display_name, color_pairs,
     fig.savefig(out_png.replace(".png", ".pdf"), bbox_inches="tight")
     plt.close(fig)
 
-    print(f"  [auto-q plot] diff panel 图保存至: {out_png}")
+    print(f"  [auto-q plot] diff panel plot saved to : {out_png}")
     return out_png
 
 
 def plot_auto_qvalue_panels_for_context(work_dir, m, n, methylation_type, unfilter_mtypes):
     """
-    对一个 methylation context 汇总所有 pair 的 FDR_corrected_results_*.txt，
-    生成与 auto_qvalue_and_plot.py 视觉一致的两张图：
-      1. p-value / adjusted p-value 曲线 + max diff point
-      2. adjusted p-value - p-value 差值曲线 + max diff point
+    Summarize FDR_corrected_results_*.txt files from all pairwise comparisons for one methylation context,
+    and generate two plots with the same visual style as auto_qvalue_and_plot.py:
+      1. p-value / adjusted p-value curve with the max-difference point;
+      2. adjusted p-value minus p-value curve with the max-difference point.
     """
     if not (AUTO_QVALUE_TWOSTEP or AUTO_QVALUE_REPORT_ONLY):
         return
 
-    # auto-qvalue 只用于两步法 context；非两步法 context 不画，避免误解。
+    # Use auto-qvalue only for two-step-FDR contexts; skip non-two-step contexts to avoid misinterpretation.
     if methylation_type in unfilter_mtypes:
-        print(f"  [auto-q plot] {methylation_type} 不是两步法 context，跳过 auto-qvalue 绘图")
+        print(f"  [auto-q plot] {methylation_type} is not a two-step-FDR context; skipping auto-qvalue plotting")
         return
 
     input_files, ordered_keys, display_name = _autoq_collect_context_fdr_files(
@@ -1534,7 +1534,7 @@ def plot_auto_qvalue_panels_for_context(work_dir, m, n, methylation_type, unfilt
     )
 
     if not ordered_keys:
-        print(f"  [auto-q plot] 未找到 {methylation_type} 的 FDR_corrected_results 文件，跳过")
+        print(f"  [auto-q plot] No {methylation_type} FDR_corrected_results file found; skipping")
         return
 
     save_dir = os.path.join(work_dir, "and_output", "auto_qvalue_plots", methylation_type)
@@ -1547,7 +1547,7 @@ def plot_auto_qvalue_panels_for_context(work_dir, m, n, methylation_type, unfilt
     for key in ordered_keys:
         rank, p, adj = _autoq_read_pq_file(input_files[key])
         if rank is None:
-            print(f"  [auto-q plot] 读取失败，跳过: {input_files[key]}")
+            print(f"  [auto-q plot] read failed; skipping: {input_files[key]}")
             continue
 
         rank_sub, p_sub, adj_sub = _autoq_keep_pvalue_below_cutoff(
@@ -1556,21 +1556,21 @@ def plot_auto_qvalue_panels_for_context(work_dir, m, n, methylation_type, unfilt
             cutoff=AUTO_QVALUE_P_CUTOFF
         )
         if rank_sub is None:
-            print(f"  [auto-q plot] {display_name[key]} 无 p < {AUTO_QVALUE_P_CUTOFF} 位点，跳过")
+            print(f"  [auto-q plot] {display_name[key]} has no sites with p < {AUTO_QVALUE_P_CUTOFF} sites; skipping")
             continue
 
         info = _autoq_compute_max_diff_point(rank_sub, p_sub, adj_sub)
         if info is None:
-            print(f"  [auto-q plot] {display_name[key]} max-diff 计算失败，跳过")
+            print(f"  [auto-q plot] {display_name[key]} max-diff calculation failed; skipping")
             continue
 
         diff_cache[key] = info
 
     if not diff_cache:
-        print(f"  [auto-q plot] {methylation_type} 没有可绘图数据")
+        print(f"  [auto-q plot] {methylation_type} has no plottable data")
         return
 
-    print(f"  [auto-q plot] {methylation_type}: 检测到 {len(diff_cache)} 个 pairwise FDR 文件")
+    print(f"  [auto-q plot] {methylation_type}: detected {len(diff_cache)} pairwise FDR files")
     _autoq_save_max_diff_table(diff_cache, ordered_keys, display_name, save_dir)
     _autoq_plot_fdr_panels(diff_cache, ordered_keys, display_name, color_pairs, save_dir, AUTO_QVALUE_P_CUTOFF)
     _autoq_plot_diff_panels(diff_cache, ordered_keys, display_name, color_pairs, save_dir)
@@ -1580,7 +1580,7 @@ def plot_all_auto_qvalue_panels(work_dir, m, n, unfilter_mtypes):
     if not (AUTO_QVALUE_TWOSTEP or AUTO_QVALUE_REPORT_ONLY):
         return
 
-    print("\n生成 auto q-value 阈值诊断图...")
+    print("\nGenerating auto q-value threshold diagnostic plots...")
     for mtype in ['CpG', 'CHH', 'CHG']:
         plot_auto_qvalue_panels_for_context(
             work_dir=work_dir,
@@ -1626,7 +1626,7 @@ def _estimate_vote_required_count_from_counts(counts, total_groups, allow_trunca
             "n_candidates": 0,
         }
 
-    # 单峰时 GMM 没有可靠谷底，使用 2/3/当前 vote-threshold 对应的兜底整数阈值。
+    # For a unimodal distribution, GMM has no reliable valley; use the fallback integer threshold implied by 2/3 or the current vote-threshold.
     if len(nonzero_counts) == 1:
         single_value = int(nonzero_counts.index[0])
         return fallback, {
@@ -1734,7 +1734,7 @@ def _plot_vote_support_distribution(counts, total_groups, required_count, info, 
         plt.savefig(out_file, dpi=300, bbox_inches='tight')
         plt.close()
     except Exception as e:
-        print(f"  警告：自动投票阈值分布图保存失败 {out_file}: {e}")
+        print(f"  WARNING: failed to save the auto vote-threshold distribution plot {out_file}: {e}")
         try:
             plt.close()
         except Exception:
@@ -1745,7 +1745,7 @@ def _write_auto_vote_summary(records, output_dir, filename):
     os.makedirs(output_dir, exist_ok=True)
     out_file = os.path.join(output_dir, filename)
     pd.DataFrame(records).to_csv(out_file, sep='\t', index=False)
-    print(f"自动投票阈值汇总表保存至: {out_file}")
+    print(f"Auto vote-threshold summary table saved to: {out_file}")
 
 
 def compute_dmp_vote_thresholds(
@@ -1778,16 +1778,16 @@ def compute_dmp_vote_thresholds(
     )
     plot_path.mkdir(parents=True, exist_ok=True)
 
-    group_label = f"{m}×{n}"
+    group_label = f"{m}x{n}"
     total_groups = int(m) * int(n)
     meth_diff_threshold = float(meth_diff_threshold)
     print(
-        f"分析 DMP 自动投票阈值：{m} 行 × {n} 列比较组"
-        f"（共 {total_groups} 组）"
+        f"Analyzing DMP auto vote threshold: {m} rows x {n}  columns of comparison groups"
+        f"(with {total_groups} groups)"
     )
     print(
-        "  数据源 = 完整FDR表；pair支持条件 = "
-        f"q通过 且 abs(MethDiff)>={meth_diff_threshold:.6g}"
+        "  data source = completeFDRtable;pairsupport condition = "
+        f"q passes and abs(MethDiff)>={meth_diff_threshold:.6g}"
     )
 
     group_dirs = []
@@ -1795,7 +1795,7 @@ def compute_dmp_vote_thresholds(
         for wt_idx in range(1, int(n) + 1):
             dir_path = base_path / f"output_wt{wt_idx}_mut{mut_idx}"
             if not dir_path.is_dir():
-                print(f"  ⚠ 警告：目录不存在 {dir_path}")
+                print(f"  [WARN] WARNING: directory does not exist {dir_path}")
             group_dirs.append((wt_idx, mut_idx, dir_path))
 
     if chromosomes is None or chromosomes == "all":
@@ -1811,7 +1811,7 @@ def compute_dmp_vote_thresholds(
     pair_filter_records = []
 
     for ctx in contexts:
-        print(f"\n▶ 处理 DMP {ctx} 上下文 ...")
+        print(f"\n> Processing DMP {ctx} context ...")
         all_records = []
 
         for group_id, (wt_idx, mut_idx, grp_dir) in enumerate(group_dirs):
@@ -1824,11 +1824,11 @@ def compute_dmp_vote_thresholds(
                 if p.is_file()
             )
             if not fdr_files:
-                print(f"  ⚠ {ctx_dir} 中未找到完整FDR文件")
+                print(f"  [WARN] {ctx_dir}  contains no complete FDR file")
                 continue
             if len(fdr_files) > 1:
                 print(
-                    f"  ⚠ {ctx_dir} 中有多个FDR文件，使用第一个："
+                    f"  [WARN] {ctx_dir}  contains multiple FDR files; using the first one: "
                     f"{fdr_files[0].name}"
                 )
 
@@ -1840,7 +1840,7 @@ def compute_dmp_vote_thresholds(
                         fdr_file, sep=r"\s+", engine="python"
                     )
             except Exception as exc:
-                print(f"  ⚠ 读取FDR文件失败 {fdr_file}: {exc}")
+                print(f"  [WARN] Failed to read FDR file {fdr_file}: {exc}")
                 continue
 
             required = {
@@ -1849,7 +1849,7 @@ def compute_dmp_vote_thresholds(
             missing = required - set(df.columns)
             if missing:
                 print(
-                    f"  ⚠ {fdr_file} 缺少列 {sorted(missing)}，跳过"
+                    f"  [WARN] {fdr_file} is missing columns {sorted(missing)}; skipping"
                 )
                 continue
 
@@ -1930,8 +1930,8 @@ def compute_dmp_vote_thresholds(
 
         if not all_records:
             print(
-                f"  未找到任何满足q与MethDiff条件的 {ctx} 位点，"
-                "使用 --vote-threshold 兜底"
+                f"  No {ctx} sites,"
+                "Using --vote-threshold fallback"
             )
             thresholds[ctx] = None
             record = {
@@ -1983,7 +1983,7 @@ def compute_dmp_vote_thresholds(
         ]
 
         if len(group_cols) == 0:
-            print(f"  {ctx} 未形成有效group列，使用比例阈值兜底")
+            print(f"  {ctx} formed no valid group columns; using the proportional threshold as fallback")
             thresholds[ctx] = None
             record = {
                 "target": "DMP",
@@ -2122,7 +2122,7 @@ def compute_dmp_vote_thresholds(
             plt.savefig(img_file, dpi=300, bbox_inches="tight")
             plt.close()
         except Exception as e:
-            print(f"  ⚠ {ctx} 自动投票阈值图片保存失败 {img_file}: {e}")
+            print(f"  [WARN] {ctx} failed to save the auto vote-threshold plot {img_file}: {e}")
             try:
                 plt.close()
             except Exception:
@@ -2160,9 +2160,9 @@ def compute_dmp_vote_thresholds(
             record[f"count_{i}"] = int(counts_full.loc[i])
         records.append(record)
         print(
-            f"  ✓ {ctx}: 推荐阈值={best_t}；"
-            f"MethDiff过滤阈值={meth_diff_threshold:.6g}；"
-            f"图片={img_file}"
+            f"  [OK] {ctx}: recommended threshold = {best_t};"
+            f"MethDifffiltering threshold={meth_diff_threshold:.6g};"
+            f"plot={img_file}"
         )
 
     _write_auto_vote_summary(
@@ -2173,7 +2173,7 @@ def compute_dmp_vote_thresholds(
         sep="\t", index=False,
     )
     print(
-        "DMP pair过滤汇总表保存至: "
+        "DMP pair-filtering summary table saved to: "
         f"{plot_path / 'DMP_pair_filtering_summary.tsv'}"
     )
     return thresholds
@@ -2187,23 +2187,24 @@ def compute_dmr_vote_thresholds(
         output_dir: Optional[str] = None
 ) -> dict:
     """
-    自动读取 m×n 个比较组 and_output/dmr_analysis_wt<wt>_mut<mut>/<context>/dmr_fisher_significant_*.txt，
-    筛选 qvalue <= DMR_QVALUE_THRESHOLD 的显著 DMR，合并后计算每个 DMR 的支持次数，
-    使用双峰 GMM 拟合分布并自动选择 DMR 投票阈值。
-    同时保存 DMR 支持次数分布图和 DMR_vote_threshold_summary.tsv。
+    Automatically read significant DMR files from m*n comparison groups under
+    and_output/dmr_analysis_wt<wt>_mut<mut>/<context>/dmr_fisher_significant_*.txt.
+    DMRs with qvalue <= DMR_QVALUE_THRESHOLD are merged, support counts are calculated,
+    and a bimodal GMM is used to automatically select the DMR voting threshold.
+    The DMR support-count distribution plot and DMR_vote_threshold_summary.tsv are also saved.
 
-    特殊处理：
-      1. 单峰分布：阈值使用当前 --vote-threshold 对应的 fallback required_count；
-      2. 截断型分布：低支持次数段全无数据时，将 GMM 阈值减 1。
+    Special cases:
+      1. Unimodal distribution: use the fallback required_count implied by the current --vote-threshold.
+      2. Truncated distribution: if the low-support range has no data, decrease the GMM threshold by 1.
     """
     if base_dir is None:
         base_path = Path(__file__).parent
     else:
         base_path = Path(base_dir)
 
-    # 兼容两种情况：
-    # 1) base_dir 是运行根目录，DMR 文件在 base_dir/and_output/dmr_analysis_...
-    # 2) base_dir 已经是 and_output，DMR 文件在 base_dir/dmr_analysis_...
+    # Support two cases:
+    # 1) base_dir is the run root, DMR files are under base_dir/and_output/dmr_analysis_...
+    # 2) base_dir is already and_output, DMR files are under base_dir/dmr_analysis_...
     and_output_path = base_path / 'and_output'
     if not and_output_path.is_dir():
         and_output_path = base_path
@@ -2211,16 +2212,16 @@ def compute_dmr_vote_thresholds(
     plot_path = Path(output_dir) if output_dir is not None else and_output_path / 'auto_vote_thresholds'
     plot_path.mkdir(parents=True, exist_ok=True)
 
-    group_label = f"{m}×{n}"
+    group_label = f"{m}x{n}"
     total_groups = int(m) * int(n)
-    print(f"分析 DMR 自动投票阈值：{m} 行 × {n} 列 比较组（共 {total_groups} 组）")
+    print(f"Analyzing DMR auto vote threshold: {m} rows x {n} columns of comparison groups (total {total_groups} groups)")
 
     group_dirs = []
     for mut_idx in range(1, int(m) + 1):
         for wt_idx in range(1, int(n) + 1):
             dir_path = and_output_path / f"dmr_analysis_wt{wt_idx}_mut{mut_idx}"
             if not dir_path.is_dir():
-                print(f"  ⚠ 警告：目录不存在 {dir_path}")
+                print(f"  [WARN] WARNING: directory does not exist {dir_path}")
             group_dirs.append(dir_path)
 
     if chromosomes is None or chromosomes == "all":
@@ -2233,7 +2234,7 @@ def compute_dmr_vote_thresholds(
     records = []
 
     for ctx in contexts:
-        print(f"\n▶ 处理 DMR {ctx} 上下文 ...")
+        print(f"\n> Processing DMR {ctx} context ...")
         all_records = []
         fallback = _auto_vote_fallback_required_count(total_groups)
 
@@ -2276,11 +2277,11 @@ def compute_dmr_vote_thresholds(
                     all_records.append(df[['chromosome', 'DMR_start', 'DMR_end', 'group_id']])
 
                 except Exception as e:
-                    print(f"  ⚠ 警告：读取 DMR 文件失败 {file}: {e}")
+                    print(f"  [WARN] WARNING: failed to read DMR file {file}: {e}")
                     continue
 
         if not all_records:
-            print(f"  未找到任何显著 {ctx} DMR，使用 --vote-threshold 兜底")
+            print(f"  No significant {ctx} DMRs found; using --vote-threshold as fallback")
             thresholds[ctx] = None
 
             record = {
@@ -2324,7 +2325,7 @@ def compute_dmr_vote_thresholds(
         ]
 
         if len(group_cols) == 0:
-            print(f"  {ctx} 未形成有效 group 列，使用 --vote-threshold 兜底")
+            print(f"  {ctx} formed no valid group columns; using --vote-threshold as fallback")
             thresholds[ctx] = None
 
             record = {
@@ -2355,7 +2356,7 @@ def compute_dmr_vote_thresholds(
 
         nonzero_counts = counts[counts > 0]
 
-        # ========== 特殊处理：单峰分布 ==========
+        # ========== Special handling: unimodal distribution ==========
         if len(nonzero_counts) == 1:
             single_value = int(nonzero_counts.index[0])
             best_t = int(fallback)
@@ -2365,8 +2366,8 @@ def compute_dmr_vote_thresholds(
             method = 'fallback_vote_threshold'
 
             print(
-                f"  ⚠ 检测到单峰分布：所有 DMR 的支持次数均为 {single_value}，"
-                f"采用 fallback 阈值 t={best_t}"
+                f"  [WARN] Detected a unimodal distribution: all DMR support counts are {single_value},"
+                f"using fallback threshold t={best_t}"
             )
 
             thresholds[ctx] = best_t
@@ -2392,7 +2393,7 @@ def compute_dmr_vote_thresholds(
             records.append(record)
             continue
 
-        # ========== 正常双峰拟合 ==========
+        # ========== Normal bimodal fitting ==========
         x = np.repeat(range(1, total_groups + 1), counts.values)
 
         if len(x) < 2:
@@ -2433,7 +2434,7 @@ def compute_dmr_vote_thresholds(
                 status = 'ok'
                 method = 'otsu_fallback'
 
-            # ========== 特殊处理：截断型分布 ==========
+            # ========== Special handling: truncated distribution ==========
             half_limit = total_groups // 2
             low_range_zero = all(counts.loc[i] == 0 for i in range(1, half_limit + 1))
 
@@ -2443,13 +2444,13 @@ def compute_dmr_vote_thresholds(
                 status = 'ok_truncated_adjusted'
                 method = f'{method}_truncated_adjust_{original_t}_to_{best_t}'
                 print(
-                    f"  ⚠ 检测到截断型分布：支持次数 1 到 {half_limit} 均无 DMR，"
-                    f"将阈值从 {original_t} 调整为 {best_t}"
+                    f"  [WARN] Detected a truncated distribution: support counts from 1 to {half_limit} have no DMR,"
+                    f"adjust threshold from {original_t} to {best_t}"
                 )
 
             best_t = max(1, min(int(best_t), total_groups))
 
-        # ========== 绘图 ==========
+        # ========== Plotting ==========
         img_file = plot_path / f"DMR_{ctx}_vote_support_distribution_{total_groups}_groups.jpeg"
 
         try:
@@ -2530,7 +2531,7 @@ def compute_dmr_vote_thresholds(
             plt.close()
 
         except Exception as e:
-            print(f"  ⚠ 警告：{ctx} 自动投票阈值图片保存失败 {img_file}: {e}")
+            print(f"  [WARN] WARNING: {ctx} failed to save the auto vote-threshold plot {img_file}: {e}")
             try:
                 plt.close()
             except Exception:
@@ -2560,7 +2561,7 @@ def compute_dmr_vote_thresholds(
 
         records.append(record)
 
-        print(f"  ✓ {ctx}: 推荐阈值 = {best_t}，图片已保存至 {img_file}")
+        print(f"  [OK] {ctx}: recommended threshold = {best_t}; plot saved to  {img_file}")
 
     _write_auto_vote_summary(records, str(plot_path), 'DMR_vote_threshold_summary.tsv')
     return thresholds
@@ -2570,14 +2571,14 @@ def update_auto_dmp_vote_thresholds(m, n, work_dir='.', meth_diff_threshold=0.0)
     global AUTO_DMP_VOTE_THRESHOLDS
     if not (AUTO_DMP_VOTE_THRESHOLD or AUTO_VOTE_THRESHOLD_REPORT_ONLY):
         AUTO_DMP_VOTE_THRESHOLDS = {'CpG': None, 'CHH': None, 'CHG': None}
-        print("DMP自动投票阈值未启用，使用 --vote-threshold")
+        print("DMP auto vote threshold is disabled; using --vote-threshold")
         return AUTO_DMP_VOTE_THRESHOLDS
     AUTO_DMP_VOTE_THRESHOLDS = compute_dmp_vote_thresholds(
         m=m, n=n, chromosomes='all', base_dir=work_dir,
         output_dir=os.path.join(work_dir, 'and_output', 'auto_vote_thresholds'),
         meth_diff_threshold=meth_diff_threshold
     )
-    print(f"DMP自动投票阈值: {AUTO_DMP_VOTE_THRESHOLDS}")
+    print(f"DMP auto vote thresholds: {AUTO_DMP_VOTE_THRESHOLDS}")
     return AUTO_DMP_VOTE_THRESHOLDS
 
 
@@ -2585,13 +2586,13 @@ def update_auto_dmr_vote_thresholds(m, n, work_dir='.'):
     global AUTO_DMR_VOTE_THRESHOLDS
     if not (AUTO_DMR_VOTE_THRESHOLD or AUTO_VOTE_THRESHOLD_REPORT_ONLY):
         AUTO_DMR_VOTE_THRESHOLDS = {'CpG': None, 'CHH': None, 'CHG': None}
-        print("DMR自动投票阈值未启用，使用 --vote-threshold")
+        print("DMR auto vote threshold is disabled; using --vote-threshold")
         return AUTO_DMR_VOTE_THRESHOLDS
     AUTO_DMR_VOTE_THRESHOLDS = compute_dmr_vote_thresholds(
         m=m, n=n, chromosomes='all', base_dir=work_dir,
         output_dir=os.path.join(work_dir, 'and_output', 'auto_vote_thresholds')
     )
-    print(f"DMR自动投票阈值: {AUTO_DMR_VOTE_THRESHOLDS}")
+    print(f"DMR auto vote threshold: {AUTO_DMR_VOTE_THRESHOLDS}")
     return AUTO_DMR_VOTE_THRESHOLDS
 
 
@@ -2704,7 +2705,7 @@ def _run_common_sites_to_dmr_worker(payload):
 
 
 def _run_summarize_dmr_worker(payload):
-    """Worker for common DMR reads summation/Fisher/FDR for one pair × context task."""
+    """Worker for common DMR reads summation/Fisher/FDR for one pair x context task."""
     _apply_worker_config(payload.get("config"))
     log_file = payload.get("log_file")
     start = time.time()
@@ -2754,7 +2755,7 @@ def _run_newtoboth_worker(payload):
     start = time.time()
 
     def _run():
-        print(f"处理文件{filepath}")
+        print(f"Processing file {filepath}")
         single_newtoboth(filepath, output_dir, num, chr_series)
 
     if log_file:
@@ -2802,13 +2803,13 @@ def _build_parallel_config():
 
 def process_common_sites_dmr_and_summarize(dir1, dir2, m, n, methylation_types=['CpG', 'CHH', 'CHG'], work_dir=".", threads=1):
     """
-    完整流程：处理 common sites DMR + 循环求和分析 + 汇总
+    Full workflow: process common-site DMR candidates, summarize methylation reads, and aggregate results.
 
-    并行策略：
-      1. common significant sites -> common DMR candidate：按 methylation type 并行
-      2. common DMR 在各 replicate pair 中 reads 汇总/Fisher/FDR：在 summarize_all_dmr_methylation 中并行
+    Parallelization strategy:
+      1. common significant sites -> common DMR candidates: parallelized by methylation type;
+      2. common DMR read summarization/Fisher/FDR across replicate pairs: parallelized in summarize_all_dmr_methylation.
     """
-    print("第三阶段：处理共同显著位点 DMR")
+    print("Stage 3: process common significant sites into DMR candidates")
 
     threads = max(1, int(threads))
     config = _build_parallel_config()
@@ -2817,7 +2818,7 @@ def process_common_sites_dmr_and_summarize(dir1, dir2, m, n, methylation_types=[
         for mtype in methylation_types:
             dmr_results = process_common_sites_to_dmr(methylation_type=mtype, work_dir=work_dir)
             if dmr_results:
-                print(f"\n{mtype} 类型 DMR 分析完成，共 {len(dmr_results)} 个染色体有DMR结果")
+                print(f"\n{mtype} DMR analysis completed; {len(dmr_results)} chromosomes have DMR results")
     else:
         max_workers = min(threads, len(methylation_types))
         log_dir = os.path.join(work_dir, "parallel_logs", "common_dmr_candidates")
@@ -2831,7 +2832,7 @@ def process_common_sites_dmr_and_summarize(dir1, dir2, m, n, methylation_types=[
                 "log_file": os.path.join(log_dir, f"common_dmr_candidate_{mtype}.log"),
             })
 
-        print(f"启用并行 common DMR candidate 处理: workers={max_workers}, tasks={len(tasks)}")
+        print(f"Enabled parallel common-DMR candidate processing: workers={max_workers}, tasks={len(tasks)}")
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             future_to_task = {executor.submit(_run_common_sites_to_dmr_worker, task): task for task in tasks}
             for idx, future in enumerate(as_completed(future_to_task), 1):
@@ -2847,56 +2848,56 @@ def process_common_sites_dmr_and_summarize(dir1, dir2, m, n, methylation_types=[
                     print(f"[FAILED] common DMR {mtype}: {e}")
                     raise
 
-    # 第二步：对所有 output_x_y 的 DMR 进行求和分析并汇总
+    # Step 2: summarize DMR methylation over all output_x_y comparisons and aggregate the results
     summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types, work_dir=work_dir, threads=threads)
 
 def generate_final_significant_dmr(dmr_data_dict, methylation_type, output_dir,m,n,dir1,dir2):
     """
-    生成最终的显著 DMR 文件（基于贝叶斯判定）
+    Generate the final significant DMR file based on the voting/Bayesian decision rule.
 
-    参数：
-        dmr_data_dict: 染色体->DMR区域(start,end)->数据列表(一系列每个位点的统计数据) 的映射字典
-        methylation_type: 甲基化类型
-        output_dir: 输出目录
-        threshold: 贝叶斯判定阈值（默认 2/3）
+    Parameters:
+        dmr_data_dict: mapping from chromosome to DMR interval (start, end) to a data list of per-site statistics.
+        methylation_type: methylation context.
+        output_dir: output directory.
+        threshold: voting/Bayesian decision threshold; default is 2/3.
     """
-    print(f"\n处理 {methylation_type} 的最终 DMR 汇总...")
+    print(f"\nProcessing {methylation_type}  final DMR aggregation...")
 
     if not dmr_data_dict:
-        print(f"  {methylation_type} 无 DMR 数据")
+        print(f"  {methylation_type} has no DMR data")
         return
 
     auto_vote_threshold = AUTO_DMR_VOTE_THRESHOLDS.get(methylation_type)
     if AUTO_VOTE_THRESHOLD_REPORT_ONLY:
         auto_vote_threshold = None
     if auto_vote_threshold is not None:
-        print(f"  使用 {methylation_type} DMR自动投票阈值: {auto_vote_threshold}")
+        print(f"  Using {methylation_type} DMR auto vote threshold: {auto_vote_threshold}")
     else:
-        print(f"  {methylation_type} DMR自动投票阈值不可用或仅报告，使用比例阈值 {VOTE_THRESHOLD}")
+        print(f"  {methylation_type} DMR auto vote threshold is unavailable or report-only; using proportional threshold {VOTE_THRESHOLD}")
 
     final_dmr_list = []
 
-    # 遍历所有染色体
+    # Iterate over all chromosomes
     for chr_num in sorted(dmr_data_dict.keys()):
-        print(f"  处理染色体 {chr_num}...")
-        chr_dmr_dict = dmr_data_dict[chr_num]  # 获取当前染色体中的该映射：DMR区域(start,end)->数据列表(一系列每个位点的统计数据)
-                                                                    # 此处数据列表中有m*n个元素，代表每次检验中该区域的统计信息
+        print(f"  Processing chromosome {chr_num}...")
+        chr_dmr_dict = dmr_data_dict[chr_num]  # Get the mapping for the current chromosome:DMR interval (start, end) -> data list (per-site statistics)
+                                                                    # The data list contains m*n elements, one for each test for this region
 
-        # 遍历该染色体的所有 DMR 区域
+        # Iterate over all DMR regions on this chromosome
         for dmr_key, data_list in chr_dmr_dict.items():
             start, end = dmr_key
 
-            # 统计显著次数
+            # Count significant calls
             sig_count = sum(1 for item in data_list if item.qvalue <= DMR_QVALUE_THRESHOLD)
             total_count = len(data_list)
 
-            # 判定
+            # Decision
             is_significant = bayes_deciding(sig_count, total_count - sig_count, auto_vote_threshold=auto_vote_threshold)
 
             if not is_significant:
                 continue
 
-            # 计算平均值
+            # Calculate mean values
             avg_exp_m = np.mean([item.exp_methy for item in data_list])
             avg_exp_u = np.mean([item.exp_unmethy for item in data_list])
             avg_wild_m = np.mean([item.wild_methy for item in data_list])
@@ -2905,11 +2906,11 @@ def generate_final_significant_dmr(dmr_data_dict, methylation_type, output_dir,m
             filtered_values = [item.qvalue for item in data_list if item.qvalue <= DMR_QVALUE_THRESHOLD]
             avg_qvalue = np.mean(filtered_values) if filtered_values else 1
 
-            # 投票决定 direction（多数投票）
+            # Determine direction by majority voting
             direction_votes = [item.direction for item in data_list]
             direction = 1 if sum(direction_votes) >= len(direction_votes) / 2 else 0
 
-            # 计算概率
+            # Calculate probability
             prob = sig_count / total_count
 
             dmr_record = {
@@ -2928,7 +2929,7 @@ def generate_final_significant_dmr(dmr_data_dict, methylation_type, output_dir,m
                 'Total_count': total_count,
                 'Sig_probability': prob
             }
-            # 添加所有replicate的qvalue（按顺序）
+            # Add all replicate q-values in order
             idx = 0
             for x in range(1, m + 1):
                 for y in range(1, n + 1):
@@ -2941,10 +2942,10 @@ def generate_final_significant_dmr(dmr_data_dict, methylation_type, output_dir,m
             final_dmr_list.append(dmr_record)
 
     if not final_dmr_list:
-        print(f"  {methylation_type} 无显著 DMR")
+        print(f"  {methylation_type} has no significant DMRs")
         return
 
-    # 转换为 DataFrame 并排序
+    # Convert to DataFrame and sort
     final_df = pd.DataFrame(final_dmr_list)
     final_df = final_df.sort_values(['Chromosome', 'DMR_start'])
     column_order = [
@@ -2959,56 +2960,56 @@ def generate_final_significant_dmr(dmr_data_dict, methylation_type, output_dir,m
     )
     column_order = column_order + replicate_columns
     final_df = final_df[column_order]
-    # 保存结果
+    # Save results
     output_file = os.path.join(output_dir, f"{methylation_type}-final_significant_regions_DMRs.txt")
     final_df.to_csv(output_file, sep='\t', index=False)
 
-    print(f"  {methylation_type} 最终显著 DMR: {len(final_df)} 个")
-    print(f"  保存至: {output_file}")
+    print(f"  {methylation_type} final significant DMRs: {len(final_df)} ")
+    print(f"  saved to: {output_file}")
 
-    # 统计信息
+    # Summary statistics
     hyper_count = len(final_df[final_df['Direction'] == 1])
     hypo_count = len(final_df[final_df['Direction'] == 0])
-    print(f"    - 高甲基化: {hyper_count} ({hyper_count / len(final_df) * 100:.1f}%)")
-    print(f"    - 低甲基化: {hypo_count} ({hypo_count / len(final_df) * 100:.1f}%)")
+    print(f"    - hypermethylated: {hyper_count} ({hyper_count / len(final_df) * 100:.1f}%)")
+    print(f"    - hypomethylated: {hypo_count} ({hypo_count / len(final_df) * 100:.1f}%)")
 
     return final_df
 
 def collect_dmr_results(methy_dir, methylation_type, all_dmr_results):
     """
-    收集单次 DMR 分析的结果
+    Collect results from one DMR analysis.
 
-    参数：
-        methy_dir: 甲基化类型目录（如 ./and_output/CpG/）
-        methylation_type: 甲基化类型
-        all_dmr_results: 汇总字典，输入的时候只有三个甲基化类型键，后面内容是空的
+    Parameters:
+        methy_dir: methylation-type directory, e.g., ./and_output/CpG/.
+        methylation_type: methylation context.
+        all_dmr_results: aggregation dictionary initialized with the three methylation-type keys.
     """
-    # 查找所有 dmr_fisher_Chr*.txt 文件
+    # Find all dmr_fisher_Chr*.txt files
     fisher_files = glob.glob(os.path.join(methy_dir, "dmr_fisher_Chr*.txt"))
 
     for fisher_file in fisher_files:
-        # 提取染色体号
+        # Extract chromosome number
         match = re.search(r'Chr(\d+)\.txt$', fisher_file)
         if not match:
             continue
         chr_num = int(match.group(1))
 
-        # 读取文件
+        # Read file
         try:
             df = pd.read_csv(fisher_file, sep='\t')
 
             if df.empty:
                 continue
 
-            # 初始化该染色体的字典
+            # Initialize the dictionary for this chromosome
             if chr_num not in all_dmr_results[methylation_type]:
                 all_dmr_results[methylation_type][chr_num] = defaultdict(list)
 
-            # 收集每个 DMR 区域的数据
+            # Collect data for each DMR region
             for _, row in df.iterrows():
                 dmr_key = (int(row['DMR_start']), int(row['DMR_end']))
 
-                # 存储 (exp_m, exp_u, wild_m, wild_u, qvalue, direction)
+                # Store (exp_m, exp_u, wild_m, wild_u, qvalue, direction)
                 dmr_data = DmrRecord(
                     exp_methy=int(row['exp_methy_sum']),
                     exp_unmethy=int(row['exp_unmethy_sum']),
@@ -3021,16 +3022,16 @@ def collect_dmr_results(methy_dir, methylation_type, all_dmr_results):
                 all_dmr_results[methylation_type][chr_num][dmr_key].append(dmr_data)
 
         except Exception as e:
-            print(f"    警告：读取 {fisher_file} 失败: {e}")
+            print(f"    WARNING: read {fisher_file} failed: {e}")
             continue
 
 def summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types=['CpG', 'CHH', 'CHG'], work_dir=".", threads=1):
     """
-    对所有 output_x_y 目录，使用 common DMR 区域进行甲基化读段求和分析。
-    并行版中，worker 只写自己的 dmr_analysis_wt*_mut*/context 目录；
-    汇总 all_dmr_results 的步骤仍由主进程顺序完成，避免共享字典并发写入。
+    For all output_x_y directories, summarize methylation reads over common DMR regions.
+    In the parallel version, each worker writes only to its own dmr_analysis_wt*_mut*/context directory.
+    The main process still aggregates all_dmr_results sequentially to avoid concurrent writes to a shared dictionary.
     """
-    print("第四阶段：Common DMR 在各组合中的甲基化读段求和分析")
+    print("Stage 4: sum methylation reads for common DMRs across all combinations")
 
     and_output_dir = os.path.join(work_dir, "and_output")
     os.makedirs(and_output_dir, exist_ok=True)
@@ -3049,7 +3050,7 @@ def summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types=['CpG', 'C
                 f1 = file1_path_template.format(mtype)
                 f2 = file2_path_template.format(mtype)
                 if not os.path.exists(f1) or not os.path.exists(f2):
-                    print(f"  跳过 wt{replicate_y}_mut{replicate_x} {mtype}：both 文件不存在")
+                    print(f"  Skipping wt{replicate_y}_mut{replicate_x} {mtype}: both-format file does not exist")
                     continue
 
                 methy_output_dir = os.path.join(and_output_dir, f"dmr_analysis_wt{replicate_y}_mut{replicate_x}", mtype)
@@ -3070,7 +3071,7 @@ def summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types=['CpG', 'C
 
     if threads <= 1 or len(tasks) <= 1:
         for idx, task in enumerate(tasks, 1):
-            print(f"\n处理组合 ({dir1}{task['replicate_x']}, {dir2}{task['replicate_y']}) {task['methylation_type']}...")
+            print(f"\nProcessing combination ({dir1}{task['replicate_x']}, {dir2}{task['replicate_y']}) {task['methylation_type']}...")
 
             try:
                 summarize_dmr_methylation(
@@ -3084,7 +3085,7 @@ def summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types=['CpG', 'C
                 )
                 completed.append(task)
             except Exception as e:
-                print(f"  错误：处理 {task['methylation_type']} 失败: {e}")
+                print(f"  ERROR: failed to process {task['methylation_type']} failed: {e}")
                 import traceback
                 traceback.print_exc()
                 continue
@@ -3098,7 +3099,7 @@ def summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types=['CpG', 'C
                 f"dmr_summary_wt{task['replicate_y']}_mut{task['replicate_x']}_{task['methylation_type']}.log"
             )
 
-        print(f"启用并行 common DMR reads/Fisher/FDR 处理: workers={max_workers}, tasks={len(tasks)}")
+        print(f"Enabled parallel common-DMR read-sum/Fisher/FDR processing: workers={max_workers}, tasks={len(tasks)}")
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             future_to_task = {executor.submit(_run_summarize_dmr_worker, task): task for task in tasks}
             for idx, future in enumerate(as_completed(future_to_task), 1):
@@ -3112,23 +3113,23 @@ def summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types=['CpG', 'C
                     print(f"[FAILED] {label}: {e}")
                     raise
 
-    # 主进程统一收集结果，避免并发修改 all_dmr_results。
-    # 注意：并行任务完成顺序是不确定的；如果直接按完成顺序 collect，
-    # data_list 中的 qvalue 会被追加成随机顺序，导致最终 DMR 文件的 qvalue_* 列错位。
-    # 因此这里必须恢复原串行版顺序：replicate_x -> replicate_y -> methylation_type。
+    # The main process collects results centrally to avoid concurrent modification of all_dmr_results.
+    # Note: parallel task completion order is nondeterministic; collecting directly by completion order
+    # would append q-values to data_list in a random order, causing qvalue_* columns in the final DMR file to be misaligned.
+    # Therefore restore the original serial order here:replicate_x -> replicate_y -> methylation_type.
     completed = sorted(
         completed,
         key=lambda t: (int(t["replicate_x"]), int(t["replicate_y"]), str(t["methylation_type"]))
     )
 
-    print("收集 common DMR 在各组合中的 Fisher/FDR 结果...")
+    print("Collecting Fisher/FDR results for common DMRs across all combinations...")
     for task in completed:
         collect_dmr_results(task["methy_output_dir"], task["methylation_type"], all_dmr_results)
 
     if AUTO_DMR_VOTE_THRESHOLD or AUTO_VOTE_THRESHOLD_REPORT_ONLY:
         update_auto_dmr_vote_thresholds(m=m, n=n, work_dir=work_dir)
 
-    print("第五阶段：汇总 DMR 结果并进行贝叶斯判定")
+    print("Stage 5: aggregate DMR results and apply the Bayesian decision rule")
 
     for mtype in methylation_types:
         generate_final_significant_dmr(
@@ -3143,82 +3144,82 @@ def summarize_all_dmr_methylation(dir1, dir2, m, n, methylation_types=['CpG', 'C
 
 def process_common_sites_to_dmr(methylation_type='CpG',work_dir="."):
     """
-    读取 final_significant_sites_DMPs.txt 文件，按染色体分组处理DMR
+    Read final_significant_sites_DMPs.txt and process DMRs by chromosome.
 
-    参数：
+    Parameters:
+        methylation_type: methylation context (CpG, CHH, CHG).
 
-    methylation_type: 甲基化类型（CpG, CHH, CHG）
-    返回：
-        dmr_results: 字典 {chr_num: dmr_list_file_path}
+    Returns:
+        dmr_results: dictionary in the form {chr_num: dmr_list_file_path}.
     """
-    print(f"\n开始处理 {methylation_type} 的共同显著位点 DMR 分析...")
+    print(f"\nStarting {methylation_type}  common significant-site DMR analysis...")
 
     and_output_dir = os.path.join(work_dir, "and_output")
     os.makedirs(and_output_dir, exist_ok=True)
 
-    # 1. 读取 final_significant_sites_DMPs 文件
+    # 1. Read the final_significant_sites_DMPs file
     common_file = os.path.join(and_output_dir, f"{methylation_type}-final_significant_sites_DMPs.txt")
     if not os.path.exists(common_file):
-        print(f"错误：文件不存在 {common_file}")
+        print(f"ERROR: file does not exist {common_file}")
         return None
 
     try:
         df = pd.read_csv(common_file, sep='\t')
-        print(f"成功读取文件，共 {len(df)} 个位点")
+        print(f"Successfully read file; {len(df)}  sites")
     except Exception as e:
-        print(f"读取文件失败: {e}")
+        print(f"Failed to read file: {e}")
         return None
 
     if df.empty:
-        print(f"警告：{methylation_type} 文件为空")
+        print(f"WARNING: {methylation_type} file is empty")
         return None
 
-    # 2. 按染色体分组
+    # 2. Group by chromosome
     chromosomes = sorted(df['Chromosome'].unique(), key=natural_sort_key)
-    print(f"找到 {len(chromosomes)} 个染色体: {chromosomes}")
+    print(f"Found {len(chromosomes)}  chromosomes: {chromosomes}")
 
     dmr_results = {}
     total_chromosomes = len(chromosomes)
 
-    # 3. 对每个染色体进行处理
+    # 3. Process each chromosome
     for chr_num in chromosomes:
-        print(f"\n  处理染色体 {chr_num} ({chr_num}/{total_chromosomes})...")
+        print(f"\n  Processing chromosome {chr_num} ({chr_num}/{total_chromosomes})...")
 
-        # 筛选当前染色体的数据
+        # Filter records for the current chromosome
         chr_df = df[df['Chromosome'] == chr_num].copy()
 
-        # 提取需要的三列：Position, Sig_Mean_Qvalue, Methylation_Change
+        # Extract the required three columns:Position, Sig_Mean_Qvalue, Methylation_Change
         dmp_data = chr_df[['Position', 'Sig_Mean_Qvalue', 'Methylation_Change']].copy()
 
-        # 确保数据类型正确
+        # Ensure correct data types
         dmp_data['Position'] = dmp_data['Position'].astype(int)
         dmp_data['Sig_Mean_Qvalue'] = dmp_data['Sig_Mean_Qvalue'].astype(float)
         dmp_data['Methylation_Change'] = dmp_data['Methylation_Change'].astype(int)
 
-        # 按位点号排序
+        # Sort by position
         dmp_data = dmp_data.sort_values('Position').reset_index(drop=True)
 
-        print(f"    染色体 {chr_num} 共 {len(dmp_data)} 个位点")
+        print(f"    chromosome {chr_num} with {len(dmp_data)}  sites")
 
         if len(dmp_data) == 0:
-            print(f"    跳过：染色体 {chr_num} 无有效位点")
+            print(f"    skipping:chromosome {chr_num} has no valid sites")
             continue
 
-        # 4. 创建临时 DMP 文件（格式：pos qvalue change）
+        # 4. Create a temporary DMP file (format: pos qvalue change)
         temp_dmp_file = os.path.join(and_output_dir,
                                      f"DMP_common_{methylation_type}_Chr{chr_num}.txt")
 
-        # 写入 DMP 格式文件（第一行是 "first line"，后续是 pos qvalue change）
+        # Write the DMP-format file (first line is "first line", followed by pos qvalue change)
         with open(temp_dmp_file, 'w') as f:
             f.write("first line\n")
             for _, row in dmp_data.iterrows():
                 f.write(f"{int(float(row['Position']))} {float(row['Sig_Mean_Qvalue'])} {int(float(row['Methylation_Change']))}\n")
 
-        print(f"    创建 DMP 文件: {os.path.basename(temp_dmp_file)}")
+        print(f"    Created DMP file: {os.path.basename(temp_dmp_file)}")
 
-        # 5. 调用 DMR 分析函数
-        # 注意：run_dmr_pipeline_on_dmp_file 需要 chromoNo 参数
-        # 我们传入总染色体数
+        # 5. Call the DMR analysis function
+        # Note:run_dmr_pipeline_on_dmp_file requires the chromoNo parameter
+        # Pass the total chromosome count
         try:
             dmr_list_file = run_dmr_pipeline_on_dmp_file_auto(
                 dmp_file=temp_dmp_file,
@@ -3227,53 +3228,55 @@ def process_common_sites_to_dmr(methylation_type='CpG',work_dir="."):
 
             if dmr_list_file:
                 dmr_results[chr_num] = dmr_list_file
-                print(f"     染色体 {chr_num} DMR 分析完成")
+                print(f"     chromosome {chr_num} DMR analysis completed")
             else:
-                print(f"    染色体 {chr_num} DMR 分析失败（可能无有效DMR）")
+                print(f"    chromosome {chr_num} DMR analysis failed (possibly no valid DMRs)")
 
         except Exception as e:
-            print(f"     染色体 {chr_num} 处理出错: {e}")
+            print(f"     chromosome {chr_num} processing error: {e}")
             import traceback
             traceback.print_exc()
             continue
 
-    print(f"\n{methylation_type} 共同显著位点 DMR 分析完成！")
-    print(f"成功处理 {len(dmr_results)}/{len(chromosomes)} 个染色体")
+    print(f"\n{methylation_type} common significant-site DMR analysis completed.")
+    print(f"Successfully processed {len(dmr_results)}/{len(chromosomes)}  chromosomes")
 
     return dmr_results
 
 def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, file2_path, methylation_type='CpG', custom_dmr_dir=None):
     """
-    对 DMR 区域进行甲基化读段求和，并计算 Fisher p 值、FDR q 值和甲基化方向。
-    所有输出文件将保存在 methy_dir 目录下（例如：./output_1_1/CpG/）。
-    注意！！！custom_dmr_dir: 自定义 DMR 文件所在目录（如果为 None，则使用 methy_dir），这样能区分每个output_x_y自己生成的dmr和common_sites生成的dmr
+    Sum methylated/unmethylated reads over DMR regions and calculate Fisher p-values,
+    FDR q-values, and methylation direction. All output files are saved in methy_dir,
+    for example ./output_1_1/CpG/.
+    custom_dmr_dir specifies a custom DMR-file directory. If it is None, methy_dir is used.
+    This separates DMRs generated inside each output_x_y directory from DMRs generated from common sites.
     """
-    # 这里是只处理一次检验的
-    print(f"    开始 DMR 甲基化读段求和分析...")
+    # This block handles only one test
+    print(f"    Starting DMR methylation-read summation...")
 
     n_chromosomes = get_column_count(file1_path)
     if n_chromosomes is None:
-        print("    无法获取染色体数量，跳过 DMR 求和")
+        print("    Unable to obtain the chromosome count; skipping DMR summation")
         return
 
     chromosomes = [f'Chr{i}' for i in range(1, n_chromosomes + 1)]
 
-    # 收集所有染色体的 DMR 数据（不含 p 值）
+    # Collect DMR data for all chromosomes without p-values
     all_dmr_data = []  # (chrom, start, end, exp_m, exp_u, wild_m, wild_u)
 
     for idx, chrom in enumerate(chromosomes):
         chrom_num = idx + 1
         if custom_dmr_dir is not None:
-            # 读取 common DMR 文件
+            # Read common DMR file
             dmr_file = os.path.join(custom_dmr_dir, f"DMR_list_DMP_common_{methylation_type}_Chr{chrom_num}.txt")
         else:
-            # 读取 output目录 的 DMR 文件
+            # Read the DMR file from the output directory
             dmr_file = os.path.join(methy_dir, f"DMR_list_DMP_wt_replicate{replicate_y}_mut_replicate{replicate_x}_Chr{chrom_num}.txt")
         if not os.path.exists(dmr_file):
-            print(f"      跳过 {chrom}，DMR 文件不存在")
+            print(f"      skipping {chrom}; DMR file does not exist")
             continue
 
-        # 读取 DMR 区域
+        # Read DMR regions
         dmr_list = []
         with open(dmr_file, 'r') as f:
             for line in f:
@@ -3287,12 +3290,12 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                         continue
 
         if not dmr_list:
-            print(f"      {chrom} 无有效 DMR 区域")
+            print(f"      {chrom} has no valid DMR regions")
             continue
 
         col_start = idx * 3
 
-        # 读取实验组数据
+        # Read experimental-group data
         exp_sites, exp_methy_dict, exp_unmethy_dict = [], {}, {}
         try:
             with open(file1_path, 'r') as f:
@@ -3312,10 +3315,10 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                         continue
             exp_sites.sort()
         except Exception as e:
-            print(f"      读取实验组失败 ({chrom}): {e}")
+            print(f"      Failed to read experimental-group data ({chrom}): {e}")
             continue
 
-        # 读取对照组数据
+        # Read control-group data
         wild_sites, wild_methy_dict, wild_unmethy_dict = [], {}, {}
         try:
             with open(file2_path, 'r') as f:
@@ -3335,10 +3338,10 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                         continue
             wild_sites.sort()
         except Exception as e:
-            print(f"      读取对照组失败 ({chrom}): {e}")
+            print(f"      Failed to read control-group data ({chrom}): {e}")
             continue
 
-        # 汇总每个 DMR 区域的 reads
+        # Sum reads for each DMR region
         for start, end in dmr_list:
             l1 = bisect.bisect_left(exp_sites, start)
             r1 = bisect.bisect_right(exp_sites, end)
@@ -3353,10 +3356,10 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
             all_dmr_data.append((chrom, start, end, exp_m_sum, exp_u_sum, wild_m_sum, wild_u_sum))
 
     if not all_dmr_data:
-        print("    无任何有效 DMR 数据，跳过后续分析")
+        print("    No valid DMR data; skipping downstream analysis")
         return
 
-    # === 第一步：输出 dmr_summary_{chrom}.txt ===
+    # === Step 1: write dmr_summary_{chrom}.txt ===
     chrom_summary_dict = defaultdict(list)
     for item in all_dmr_data:
         chrom, start, end, exp_m, exp_u, wild_m, wild_u = item
@@ -3369,9 +3372,9 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                 f.write("DMR_start\tDMR_end\texp_methy_sum\texp_unmethy_sum\twild_methy_sum\twild_unmethy_sum\n")
                 for row in chrom_summary_dict[chrom]:
                     f.write(f"{row[0]}\t{row[1]}\t{row[2]}\t{row[3]}\t{row[4]}\t{row[5]}\n")
-            print(f"      {chrom} DMR 汇总完成 → {summary_file}")
+            print(f"      {chrom} DMR summary completed -> {summary_file}")
 
-    # === 第二步：为每个 DMR 计算 p 值 ===
+    # === Step 2: calculate p-values for each DMR ===
     dmr_with_pvals = []
     for (chrom, start, end, exp_m, exp_u, wild_m, wild_u) in all_dmr_data:
         if (exp_m + exp_u < 4) or (wild_m + wild_u < 4):
@@ -3384,16 +3387,16 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                 pval = np.nan
         dmr_with_pvals.append((chrom, start, end, exp_m, exp_u, wild_m, wild_u, pval))
 
-    # === 第三步：全局 FDR 校正（跨染色体） ===
+    # === Step 3: global FDR correction across chromosomes ===
     pvalues = np.array([item[7] for item in dmr_with_pvals])
     qvalues = calculate_qvalues(pvalues, pi=1.0)
 
-    # === 第四步：按染色体组织结果，添加 direction ===
+    # === Step 4: organize results by chromosome and add direction ===
     chrom_data_dict = defaultdict(list)
     for i, (chrom, start, end, exp_m, exp_u, wild_m, wild_u, pval) in enumerate(dmr_with_pvals):
         qval = qvalues[i]
 
-        # 计算甲基化方向
+        # Calculate methylation direction
         exp_total = exp_m + exp_u
         wild_total = wild_m + wild_u
         if exp_total > 0 and wild_total > 0:
@@ -3401,16 +3404,16 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
             wild_rate = wild_m / wild_total
             direction = 1 if exp_rate > wild_rate else 0
         else:
-            direction = 0  # 无法判断时设为 0
+            direction = 0  # Set to 0 when the direction cannot be determined
 
         chrom_data_dict[chrom].append((start, end, exp_m, exp_u, wild_m, wild_u, pval, qval, direction))
 
-    # === 第五步：输出完整 Fisher 结果 + 显著子集 ===
+    # === Step 5: write full Fisher results and significant subset ===
     for chrom in chromosomes:
         if chrom not in chrom_data_dict:
             continue
 
-        # 完整结果
+        # Full results
         fisher_file = os.path.join(methy_dir, f"dmr_fisher_{chrom}.txt")
         with open(fisher_file, 'w') as f:
             f.write("DMR_start\tDMR_end\texp_methy_sum\texp_unmethy_sum\twild_methy_sum\twild_unmethy_sum\tpvalue\tqvalue\tdirection\n")
@@ -3419,9 +3422,9 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                 p_out = pval if not np.isnan(pval) else 'nan'
                 q_out = qval if not np.isnan(qval) else 'nan'
                 f.write(f"{start}\t{end}\t{exp_m}\t{exp_u}\t{wild_m}\t{wild_u}\t{p_out:.6g}\t{q_out:.6g}\t{direction}\n")
-        print(f"      {chrom} Fisher + FDR + direction 完成 → {fisher_file}")
+        print(f"      {chrom} Fisher + FDR + direction completed -> {fisher_file}")
 
-        # 显著结果（使用可配置的 DMR q-value 阈值）
+        # Significant results using the configurable DMR q-value threshold
         sig_rows = [
             row for row in chrom_data_dict[chrom]
             if not np.isnan(row[7]) and row[7] <= DMR_QVALUE_THRESHOLD
@@ -3433,38 +3436,38 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                 for row in sig_rows:
                     start, end, exp_m, exp_u, wild_m, wild_u, pval, qval, direction = row
                     f.write(f"{start}\t{end}\t{exp_m}\t{exp_u}\t{wild_m}\t{wild_u}\t{pval:.6g}\t{qval:.6g}\t{direction}\n")
-            print(f"        → 显著 DMR (q<={DMR_QVALUE_THRESHOLD}): {sig_file}")
+            print(f"        -> significant DMR (q<={DMR_QVALUE_THRESHOLD}): {sig_file}")
         else:
-            print(f"        → {chrom} 无显著 DMR (q<={DMR_QVALUE_THRESHOLD})")
+            print(f"        -> {chrom} has no significant DMRs (q<={DMR_QVALUE_THRESHOLD})")
 
-    print("    DMR 甲基化分析完成。")
+    print("    DMR methylation analysis completed.")
 
 def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
     """
-    从 DMP 文件生成 DMR 区域 , 生成dmr_list文件
-    - methylation_matrix_file: 用于动态获取染色体数量（如 1-bothMeUnme_...txt）
-    - 所有输出文件保存在 dmp_file 所在目录。
+    Generate DMR regions and the dmr_list file from a DMP file.
+    - methylation_matrix_file is used to dynamically obtain the chromosome count, e.g., 1-bothMeUnme_...txt.
+    - All output files are saved in the directory containing dmp_file.
     """
-    # 总的核心思想如下：
-    # 用滑动窗口找到 DMP 密集的区域
-    # 通过"跳跃合并"连接相邻的密集区域
-    # 最终筛选出足够长、足够显著的 DMR
-    sWinN = 1000  # 滑动窗口大小（1000 bp）
-    M0 = 4  # 窗口内最少 DMP 数量（至少 4 个）
-    M1 = 10  # 最终 DMR 内最少 DMP 数量（至少 10 个）
-    M2 = 10  # 跳跃步长，保留原始分割行为，
+    # Core idea:
+    # Use sliding windows to find DMP-dense regions
+    # Connect adjacent dense regions by jump merging
+    # Finally retain DMRs that are long enough and sufficiently significant
+    sWinN = 1000  # Sliding-window size(1000 bp)
+    M0 = 4  # Minimum number of DMPs in a window(at least 4)
+    M1 = 10  # Minimum number of DMPs in the final DMR(at least 10)
+    M2 = 10  # Jump step size, preserving the original segmentation behavior,
 
-    # 为安全起见，确保 chromoNo >= 6（因为用到 arrayMethy1_script1[5]）
+    # For safety, ensure chromoNo >= 6 because arrayMethy1_script1[5] is used
     chromoNo = max(chromoNo, 6)
 
     class PositionNoNode:
         def __init__(self, pos=0, end=0, pV=0.0, ratio=0.0, num=0, num2=0, numCom=0, markR=0, DMR_S=0, DMR_E=0):
-            self.pos = pos  # 窗口起始位置
-            self.end = end  # 窗口结束位置
+            self.pos = pos  # Window start position
+            self.end = end  # Window end position
             self.pV = pV
             self.ratio = ratio
-            self.num = num  # 高甲基化数量
-            self.num2 = num2  # 低甲基化数量
+            self.num = num  # Number of hypermethylated sites
+            self.num2 = num2  # Number of hypomethylated sites
             self.numCom = numCom
             self.markR = markR
             self.DMR_S = DMR_S
@@ -3476,9 +3479,9 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
     output_dir = os.path.dirname(dmp_file)
     base_name = os.path.basename(dmp_file)
 
-    arrayMethy1 = [[] for _ in range(chromoNo)]  # 创建染色体个数个子列表
+    arrayMethy1 = [[] for _ in range(chromoNo)]  # Create one sublist per chromosome
 
-    # === 读取 DMP 位点 ===
+    # === Read DMP sites ===
     try:
         with open(dmp_file, 'r') as fin1:
             lines = fin1.readlines()
@@ -3495,12 +3498,12 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
                     tmpNode = PositionNoNode()
                     tmpNode.pos = pos
                     tmpNode.pV = pValue
-                    tmpNode.num = change  # 以上几行建立了当前dmp行所对应的位点信息
+                    tmpNode.num = change  # The lines above build site information for the current DMP row
                     arrayMethy1[0].append(tmpNode)
                 except (ValueError, IndexError):
                     continue
     except Exception as e:
-        print(f"    DMP 文件读取失败 {dmp_file}: {e}")
+        print(f"    Failed to read DMP file {dmp_file}: {e}")
         return None
 
     if not arrayMethy1[0]:
@@ -3510,7 +3513,7 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
     firstP = arrayMethy1[0][0].pos
     lastP = arrayMethy1[0][-1].pos
 
-    # === 滑动窗口 ===
+    # === Sliding window ===
     ratioI = 0.1
     cirN0 = (firstP - 1) // sWinN
     cir2 = 0
@@ -3538,7 +3541,7 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
         arrayMethy1[1].append(tmpNode)
         cir2 += 1
 
-    # === 构建滑动窗口列表 ===
+    # === Build the sliding-window list ===
     arrayMethy1[2] = []
     for node in arrayMethy1[1]:
         new_node = PositionNoNode()
@@ -3550,7 +3553,7 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
         new_node.markR = 0
         arrayMethy1[2].append(new_node)
 
-    # === 标准化输出 ===
+    # === Standardized output ===
     if arrayMethy1[2]:
         maxCom = max(node.numCom for node in arrayMethy1[2])
         maxCom = max(maxCom, 1)
@@ -3561,7 +3564,7 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
                     std_val = node.numCom / maxCom
                     f.write(f"{node.pos:<20}{node.end:<20}{node.numCom:<20}{std_val:.6f}\n")
 
-    # === 跳跃合并（使用你提供的代码）===
+    # === Jump merging using the provided code===
     dmr_out_file = os.path.join(output_dir, f"DMR_{base_name}")
     boundary_file = os.path.join(output_dir, f"DMR_boundaries_{base_name}")
 
@@ -3586,7 +3589,7 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
         flag6 = False
         flag7 = False
 
-        # 向左扩展
+        # Extend leftward
         while num03 >= M0 and num01 >= firstP:
             if not flag3:
                 flag1 = True
@@ -3615,7 +3618,7 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
             else:
                 break
 
-        # 向右扩展
+        # Extend rightward
         if flag1:
             idx = arrayMethy1[2].index(it04)
             for k in range(M2):
@@ -3662,19 +3665,19 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
             arrayMethy1[3].append(tmpNode)
 
     print("=" * 60)
-    print(f"识别到 {len(arrayMethy1[3])} 个DMR区域")
+    print(f"Identified {len(arrayMethy1[3])}  DMR regions")
 
-    # 输出DMR结果和边界文件
+    # Write DMR results and boundary files
     with open(dmr_out_file, 'w') as cout05:
         with open(boundary_file, 'w') as bound_out:
             for node in arrayMethy1[3]:
                 cout05.write(f"{node.pos:<20}{node.end:<20}{node.numCom:<20}[{node.DMR_S} {node.DMR_E}]\n")
                 bound_out.write(f"{node.DMR_S} {node.DMR_E}\n")
 
-    print(f"已生成边界文件: {boundary_file}")
+    print(f"Generated boundary file: {boundary_file}")
 
-    # === 合并重叠边界（动态 chromoL）===
-    chromoL = lastP + 100000  # 动态基因组长度
+    # === Merge overlapping boundaries with dynamic chromoL===
+    chromoL = lastP + 100000  # Dynamic genome length
     chromoArray = [0] * chromoL
     try:
         with open(boundary_file, 'r') as f_in:
@@ -3746,7 +3749,7 @@ def run_dmr_pipeline_on_dmp_file(dmp_file: str, chromoNo: int = 10):
         for node in final_dmr_list:
             f_final.write(f"{node.pos:<20}{node.end:<20}{node.num:<20}{node.num2:<20}{node.numCom:<20}\n")
 
-    print(f"    DMR 分析完成: {base_name} → {final_file}")
+    print(f"    DMR analysis completed: {base_name} -> {final_file}")
     return final_file
 
 
@@ -3805,7 +3808,7 @@ def run_dmr_pipeline_on_dmp_file_cpp(dmp_file: str, chromoNo: int = 10):
     base_name = os.path.basename(dmp_abs)
 
     if not os.path.exists(dmp_abs):
-        print(f"    C++ DMR 输入文件不存在: {dmp_abs}")
+        print(f"    C++ DMR input file does not exist: {dmp_abs}")
         return None
 
     # Match the Python behavior for empty / header-only DMP files.
@@ -3816,14 +3819,14 @@ def run_dmr_pipeline_on_dmp_file_cpp(dmp_file: str, chromoNo: int = 10):
         if len(lines) < 2 or not valid_data_lines:
             return None
     except Exception as e:
-        print(f"    C++ DMR 读取 DMP 文件失败 {dmp_abs}: {e}")
+        print(f"    C++ DMR failed to read DMP file {dmp_abs}: {e}")
         return None
 
     try:
         step1_bin = resolve_cpp_dmr_binary("dmr_step1")
         step2_bin = resolve_cpp_dmr_binary("dmr_step2_dynamic")
     except Exception as e:
-        print(f"    C++ DMR executable 查找失败: {e}")
+        print(f"    Failed to locate C++ DMR executable: {e}")
         raise
 
     # dmr_step1 historically writes DMR_<base_name>, not DMR_boundaries_<base_name>.
@@ -3857,7 +3860,7 @@ def run_dmr_pipeline_on_dmp_file_cpp(dmp_file: str, chromoNo: int = 10):
     log1 = os.path.join(output_dir, f"cpp_dmr_step1_{base_name}.log")
     log2 = os.path.join(output_dir, f"cpp_dmr_step2_{base_name}.log")
 
-    print(f"    使用 C++ DMR engine 处理: {base_name}")
+    print(f"    Processing with the C++ DMR engine: {base_name}")
 
     # Run from output_dir so that C++ output filenames remain clean and match the original naming convention.
     with open(log1, "w") as lf1:
@@ -3952,7 +3955,7 @@ def run_dmr_pipeline_on_dmp_file_cpp(dmp_file: str, chromoNo: int = 10):
     if os.path.exists(raw_noover_file):
         _copy_file_if_needed(raw_noover_file, expected_noover_file)
 
-    print(f"    C++ DMR 分析完成: {base_name} → {expected_list_file}")
+    print(f"    C++ DMR analysis completed: {base_name} -> {expected_list_file}")
     return expected_list_file
 
 
@@ -3966,9 +3969,9 @@ def run_dmr_pipeline_on_dmp_file_auto(dmp_file: str, chromoNo: int = 10):
 
 
 def process_chr_in_one_file(df):
-    """将输入的单个文件的前缀改为chr并将该文件所有的染色体信息返回"""
+    """Add the chr prefix to a single input file when needed and return all chromosome information from that file."""
 
-    # 该函数使得以chr开头的染色体号仍以chr开头，若不以chr开头的会加上前缀chr作为新的染色体号
+    # Keep chromosome labels that already start with chr unchanged; otherwise add the chr prefix
     def to_chr(chr_str):
         chr_str = str(chr_str).strip()
         if chr_str.lower().startswith('chr'):
@@ -3976,29 +3979,29 @@ def process_chr_in_one_file(df):
         else:
             return f"chr{chr_str}"
 
-    # 将所有染色体号改为chr开头
-    df['染色体号'] = df['染色体号'].apply(to_chr)
-    # 将所有染色体号的不重复集合返回
-    return df['染色体号'].unique()  # 返回numpy.array
+    # Ensure all chromosome labels start with chr
+    df['Chromosome_Label'] = df['Chromosome_Label'].apply(to_chr)
+    # Return the unique set of chromosome labels
+    return df['Chromosome_Label'].unique()  # Return a numpy.array
 
 def natural_sort_key(chr_name):
     """
-    自定义染色体排序函数
-    数字染色体按数值排序，字母染色体(X,Y,M等)排在最后按字母排序
+    Natural chromosome sorting key.
+    Numeric chromosomes are sorted by numeric value, and alphabetic chromosomes such as X, Y, and M are sorted afterward alphabetically.
     """
     chr_name = str(chr_name).lower()
-    # 去除 'chr' 前缀
+    # Remove 'chr' prefix
     if chr_name.startswith('chr'):
         suffix = chr_name[3:]
     else:
         suffix = chr_name
 
-    # 尝试转换为整数
+    # Try converting to integer
     try:
-        # 如果是数字，返回 (0, 数字值, '')
+        # If numeric, return (0, numeric value, '')
         return (0, int(suffix), '')
     except ValueError:
-        # 如果是字母(如X,Y,M)，返回 (1, 0, 字母)
+        # If alphabetic(such as X, Y, or M), return (1, 0, letter)
         return (1, 0, suffix)
 
 def _normalize_chr_series(s):
@@ -4020,7 +4023,7 @@ def scan_all_files_for_chr_mapping_fast(m, n, dir1, dir2, chunksize=2_000_000):
 
     for filepath in paths:
         if not os.path.exists(filepath):
-            print(f"警告: 文件不存在 {filepath}")
+            print(f"WARNING: file does not exist {filepath}")
             continue
 
         try:
@@ -4029,87 +4032,90 @@ def scan_all_files_for_chr_mapping_fast(m, n, dir1, dir2, chunksize=2_000_000):
                 sep=r"\s+",
                 header=None,
                 usecols=[0],
-                names=["染色体号"],
-                dtype={"染色体号": "string"},
+                names=["Chromosome_Label"],
+                dtype={"Chromosome_Label": "string"},
                 chunksize=chunksize,
             ):
-                chrs = _normalize_chr_series(chunk["染色体号"])
+                chrs = _normalize_chr_series(chunk["Chromosome_Label"])
                 all_chromosomes.update(chrs.dropna().unique().tolist())
 
-            print(f"扫描染色体完成: {filepath}")
+            print(f"Chromosome scan completed: {filepath}")
 
         except Exception as e:
-            print(f"读取文件 {filepath} 时出错: {e}")
+            print(f"Error while reading file {filepath}:  {e}")
 
     unique_chrs = sorted(all_chromosomes, key=natural_sort_key)
     chr_series = pd.Series(range(len(unique_chrs)), index=unique_chrs)
 
-    print(f"统一染色体映射: {chr_series}")
+    print(f"Unified chromosome mapping: {chr_series}")
     return chr_series
 
 def scan_all_files_for_chr_mapping(m, n, dir1, dir2):
-    """扫描m+n个、即所有文件，利用上一个函数收集所有染色体信息，以生成统一映射"""
+    """Scan all m+n files and collect chromosome information to create a unified chromosome mapping."""
 
-    all_chromosomes = set()  # 利用集合不重复的特性存储所有染色体号
+    all_chromosomes = set()  # Use set uniqueness to store all chromosome labels
 
-    # 扫描第一个目录的m个文件，名称格式为 i-dir1.txt,如3-msv.txt
+    # Scan the m files in the first directory; file-name format is i-dir1.txt,e.g., 3-msv.txt
     for i in range(1, m + 1):
         filepath = os.path.join(dir1, f"{i}-{os.path.basename(dir1)}.txt")
         if not os.path.exists(filepath):
-            print(f"警告: 文件不存在 {filepath}")
+            print(f"WARNING: file does not exist {filepath}")
             continue
 
         try:
             df = pd.read_csv(filepath,
                              sep=r'\s+',
                              header=None,
-                             names=['染色体号', '位点号', '甲基化读段数', '非甲基化读段数', '甲基化类型'],
+                             names=['Chromosome_Label', 'Site_Position', 'Methylated_Reads', 'Unmethylated_Reads', 'Methylation_Context'],
                              dtype=str)
-            chromosomes = process_chr_in_one_file(df)  # 获取到该文件中的所有染色体号的不重复集合
-            all_chromosomes.update(chromosomes)  # 将该文件的所有不重复的染色体号放到all_chromosomes这个集合里
-            # 注：update接受任何可迭代对象并将其中元素添加到集合中
-            print(f"文件 {filepath} 包含染色体: {sorted(chromosomes, key=natural_sort_key)}")
+            chromosomes = process_chr_in_one_file(df)  # Get the unique chromosome labels in this file
+            all_chromosomes.update(chromosomes)  # Add all unique chromosome labels from this file to all_chromosomes
+            # Note: update accepts any iterable and adds its elements to the set
+            print(f"file {filepath} contains chromosomes: {sorted(chromosomes, key=natural_sort_key)}")
         except Exception as e:
-            print(f"读取文件 {filepath} 时出错: {e}")
+            print(f"Error while reading file {filepath}:  {e}")
 
-    # 扫描第二个目录的文件
+    # Scan files in the second directory
     for j in range(1, n + 1):
         filepath = os.path.join(dir2, f"{j}-{os.path.basename(dir2)}.txt")
         if not os.path.exists(filepath):
-            print(f"警告: 文件不存在 {filepath}")
+            print(f"WARNING: file does not exist {filepath}")
             continue
 
         try:
             df = pd.read_csv(filepath,
                              sep=r'\s+',
                              header=None,
-                             names=['染色体号', '位点号', '甲基化读段数', '非甲基化读段数', '甲基化类型'],
+                             names=['Chromosome_Label', 'Site_Position', 'Methylated_Reads', 'Unmethylated_Reads', 'Methylation_Context'],
                              dtype=str)
-            chromosomes = process_chr_in_one_file(df)  # 同上
-            all_chromosomes.update(chromosomes)  # 同上
-            print(f"文件 {filepath} 包含染色体: {sorted(chromosomes, key=natural_sort_key)}")
+            chromosomes = process_chr_in_one_file(df)  # Same as above
+            all_chromosomes.update(chromosomes)  # Same as above
+            print(f"file {filepath} contains chromosomes: {sorted(chromosomes, key=natural_sort_key)}")
         except Exception as e:
-            print(f"读取文件 {filepath} 时出错: {e}")
+            print(f"Error while reading file {filepath}:  {e}")
 
-    # 创建统一的染色体映射，
-    # 注意：此时all_chromosomes这个集合中包含两个基因型文件夹中所有文件的不重复染色体号
+    # Create a unified chromosome mapping,
+    # At this point, all_chromosomes contains all unique chromosome labels across files in both genotype directories
     unique_chrs = sorted(all_chromosomes, key=natural_sort_key)
-    # 建立一个两个基因型目录中所有 不重复的 且排序了的 染色体号->数值的Series，或者说数组
+    # Build a sorted Series mapping each unique chromosome label across both genotype directories to a numeric index
     chr_series = pd.Series(range(len(unique_chrs)), index=unique_chrs)
 
-    print(f"统一染色体映射: {chr_series}")
+    print(f"Unified chromosome mapping: {chr_series}")
     return chr_series
 
 # def single_newtoboth(filepath1, output_dir, num1, chr_series):
-    '''此处参数：filepath1即如1-wt.txt，是处理的新格式文件，
-    output_dir是输出结果both文件到的目录，一般是filepath1所在的目录，
-    num1是当前处理第几个新格式文件，即当前正处理num1-基因型.txt，
-    chr_series是所有 不重复的 且排序了的 染色体号->数值的Series'''
+    """
+    Parameters:
+        filepath1 is a new-format file such as 1-wt.txt.
+        output_dir is the directory where both-format output files are written, usually the directory containing filepath1.
+        num1 is the index of the new-format file currently being processed, i.e., num1-genotype.txt.
+        chr_series is the sorted Series mapping all unique chromosome labels to numeric indices.
+    """
 
     df = pd.read_csv(filepath1,
                      sep=r'\s+',
                      header=None,
-                     names=['染色体号', '位点号', '甲基化读段数', '非甲基化读段数', '甲基化类型'],
+                     names=['Chromosome_Label', 'Site_Position', 'Methylated_Reads', 'Unmethylated_Reads', 'Methylation_Context'],
                      dtype=str)
 
     def to_chr(chr_str):
@@ -4119,70 +4125,70 @@ def scan_all_files_for_chr_mapping(m, n, dir1, dir2):
         else:
             return f"chr{chr_str}"
 
-    # 之前构建chr_series时没有修改源文件，所以此时读进来仍可能有不符合chr开头这个格式的染色体号，所以得处理
-    df['染色体号'] = df['染色体号'].apply(to_chr)
-    df['染色体号'] = df['染色体号'].map(chr_series)  # 将每个染色体号修改为其对应的数值，如chr1->0,chr2->1
-    # 以下三行，将位点号、两个读段数转换为数值
-    df['位点号'] = pd.to_numeric(df['位点号'])
-    df['甲基化读段数'] = pd.to_numeric(df['甲基化读段数'])
-    df['非甲基化读段数'] = pd.to_numeric(df['非甲基化读段数'])
-    # 将df中的染色体号换为对应的chr_series中的索引，位点号和两个读段数换成数值类型，此外把甲基化类型CG转换为CpG
-    df['甲基化类型'] = df['甲基化类型'].str.replace('CG', 'CpG')
-    # 对三类数据进行分组，后续分别操作
-    data_groups = df.groupby('甲基化类型')
-    # 根据分组的键、对应的子数据表进行遍历
+    # Because chr_series creation did not modify source files, labels read here may still lack the chr prefix and need normalization
+    df['Chromosome_Label'] = df['Chromosome_Label'].apply(to_chr)
+    df['Chromosome_Label'] = df['Chromosome_Label'].map(chr_series)  # Map each chromosome label to its numeric index, e.g., chr1 -> 0 and chr2 -> 1
+    # The following three lines convert position and read-count columns to numeric values
+    df['Site_Position'] = pd.to_numeric(df['Site_Position'])
+    df['Methylated_Reads'] = pd.to_numeric(df['Methylated_Reads'])
+    df['Unmethylated_Reads'] = pd.to_numeric(df['Unmethylated_Reads'])
+    # Map chromosome labels to chr_series indices, convert position/read counts to numeric values, and convert methylation context CG to CpG
+    df['Methylation_Context'] = df['Methylation_Context'].str.replace('CG', 'CpG')
+    # Group the three methylation-context datasets for separate processing
+    data_groups = df.groupby('Methylation_Context')
+    # Iterate over group keys and their corresponding sub-dataframes
     for methy_type, data_ind in data_groups:
         if data_ind.empty:
             continue
-        # 获取当前甲基化类型实际存在的染色体号并排序，
-        # 是当前甲基化类型有的染色体号，注意：！！！是转换后从零开始的下标！！！
-        actual_chrs = sorted(data_ind['染色体号'].dropna().unique())
-        # 同时获取总染色体数，无论该甲基化类型是否具有对应的染色体信息
+        # Get and sort chromosome indices that actually exist for the current methylation type,
+        # These are zero-based converted chromosome indices present for the current methylation type
+        actual_chrs = sorted(data_ind['Chromosome_Label'].dropna().unique())
+        # Also get the total chromosome count regardless of whether this methylation type has data for every chromosome
         chr_count = len(chr_series)
         chr_data_dict = {}
-        # mlen用于记录当前甲基化类型中所有 染色体数据条数 中的最大值
+        # mlen stores the maximum number of rows among chromosomes for the current methylation type
         mlen = 0
 
-        for chr_num in actual_chrs:  # 遍历该甲基化类型的每个染色体号（从零开始的数值）
-            # 将当前染色体号的所有数据按照位点号进行升序排序，存储在chr_data中
-            chr_data = data_ind[data_ind['染色体号'] == chr_num].sort_values('位点号').reset_index(drop=True)
-            # 将三个关心的数据 位点号-甲基化读段数-非甲基化读段数 以染色体号为键存储在chr_data_dict字典中
-            # 每个键对应的值是该三个属性组成的numpy数组
-            chr_data_dict[chr_num] = chr_data[['位点号', '甲基化读段数', '非甲基化读段数']].values
-            # 更新可能存在的更大的染色体数据条数到mlen中
+        for chr_num in actual_chrs:  # Iterate over each zero-based chromosome index for this methylation type
+            # Sort all data for the current chromosome by position in ascending order and store in chr_data
+            chr_data = data_ind[data_ind['Chromosome_Label'] == chr_num].sort_values('Site_Position').reset_index(drop=True)
+            # Store position, methylated reads, and unmethylated reads in chr_data_dict keyed by chromosome index
+            # Each key maps to a numpy array containing these three attributes
+            chr_data_dict[chr_num] = chr_data[['Site_Position', 'Methylated_Reads', 'Unmethylated_Reads']].values
+            # Update mlen if a chromosome has more rows
             mlen = max(mlen, len(chr_data_dict[chr_num]))
 
-        # 创建输出矩阵，行数为最大的染色体数据条数，列数为两个目录中所有存在的不重复染色体数*3，先用0填充
+        # Create the output matrix: rows are the maximum chromosome row count and columns are three times the number of unique chromosomes across both directories; initialize with zeros
         output_matrix = np.zeros((mlen, chr_count * 3), dtype=np.int32)
 
-        # 遍历输出矩阵中的所有行
+        # Iterate over all rows of the output matrix
         for i in range(mlen):
-            # 遍历当前甲基化类型有的染色体号（从零开始编号的数值）
-            for chr_num in actual_chrs:  # 使用连续索引
-                col_start = chr_num * 3  # 基于连续索引计算列位置
+            # Iterate over zero-based chromosome indices present for the current methylation type
+            for chr_num in actual_chrs:  # Use a continuous index
+                col_start = chr_num * 3  # Calculate column position from the continuous index
                 if i < len(chr_data_dict[chr_num]):
                     output_matrix[i, col_start:col_start + 3] = chr_data_dict[chr_num][i]
 
-        # 输出（用pandas导出）
-        output_df = pd.DataFrame(output_matrix)  # 将输出矩阵转换为DataFrame方便输出
+        # Output via pandas
+        output_df = pd.DataFrame(output_matrix)  # Convert the output matrix to a DataFrame for output
         output_file = f"{num1}-bothMeUnme_diffChromo_NOREPEATED_methy_sites_{methy_type}.txt"
         output_path = os.path.join(output_dir, output_file)
         output_df.to_csv(output_path, sep='\t', header=False, index=False)
 
 def single_newtoboth(filepath1, output_dir, num1, chr_series):
     """
-    加速版 newtoboth 单文件转换。
-    保持原输出格式：
-    每个 methylation type 输出一个 bothMeUnme_diffChromo_NOREPEATED 文件；
-    每个染色体占 3 列：Position, methylated reads, unmethylated reads。
+    Accelerated single-file conversion for newtoboth.
+    The original output format is preserved:
+    each methylation type outputs one bothMeUnme_diffChromo_NOREPEATED file,
+    and each chromosome occupies three columns: Position, methylated reads, and unmethylated reads.
     """
 
     col_names = [
-        "染色体号",
-        "位点号",
-        "甲基化读段数",
-        "非甲基化读段数",
-        "甲基化类型",
+        "Chromosome_Label",
+        "Site_Position",
+        "Methylated_Reads",
+        "Unmethylated_Reads",
+        "Methylation_Context",
     ]
 
     df = pd.read_csv(
@@ -4191,22 +4197,22 @@ def single_newtoboth(filepath1, output_dir, num1, chr_series):
         header=None,
         names=col_names,
         dtype={
-            "染色体号": "string",
-            "位点号": "int64",
-            "甲基化读段数": "int32",
-            "非甲基化读段数": "int32",
-            "甲基化类型": "string",
+            "Chromosome_Label": "string",
+            "Site_Position": "int64",
+            "Methylated_Reads": "int32",
+            "Unmethylated_Reads": "int32",
+            "Methylation_Context": "string",
         },
     )
 
     chr_map = chr_series.to_dict()
 
-    df["染色体号"] = _normalize_chr_series(df["染色体号"]).map(chr_map)
-    df = df.dropna(subset=["染色体号"]).copy()
-    df["染色体号"] = df["染色体号"].astype(np.int32)
+    df["Chromosome_Label"] = _normalize_chr_series(df["Chromosome_Label"]).map(chr_map)
+    df = df.dropna(subset=["Chromosome_Label"]).copy()
+    df["Chromosome_Label"] = df["Chromosome_Label"].astype(np.int32)
 
-    # 只把真正的 CG 改成 CpG，避免无意替换其他字符串
-    df["甲基化类型"] = df["甲基化类型"].replace({
+    # Convert only true CG contexts to CpG to avoid unintended replacement in other strings
+    df["Methylation_Context"] = df["Methylation_Context"].replace({
         "CG": "CpG",
         "cg": "CpG",
         "cG": "CpG",
@@ -4216,22 +4222,22 @@ def single_newtoboth(filepath1, output_dir, num1, chr_series):
     chr_count = len(chr_series)
     out_dtype = np.int32
 
-    for methy_type, data_ind in df.groupby("甲基化类型", sort=False):
+    for methy_type, data_ind in df.groupby("Methylation_Context", sort=False):
         if data_ind.empty:
             continue
 
-        # 一次排序，避免每个染色体单独 sort
+        # Sort once to avoid sorting each chromosome separately
         data_ind = data_ind.sort_values(
-            ["染色体号", "位点号"],
+            ["Chromosome_Label", "Site_Position"],
             kind="mergesort",
         )
 
         chr_blocks = []
         mlen = 0
 
-        for chr_num, chr_df in data_ind.groupby("染色体号", sort=True):
+        for chr_num, chr_df in data_ind.groupby("Chromosome_Label", sort=True):
             arr = chr_df[
-                ["位点号", "甲基化读段数", "非甲基化读段数"]
+                ["Site_Position", "Methylated_Reads", "Unmethylated_Reads"]
             ].to_numpy(dtype=out_dtype, copy=True)
 
             chr_num = int(chr_num)
@@ -4244,7 +4250,7 @@ def single_newtoboth(filepath1, output_dir, num1, chr_series):
 
         output_matrix = np.zeros((mlen, chr_count * 3), dtype=out_dtype)
 
-        # 关键加速点：按染色体整块赋值，而不是逐行逐染色体赋值
+        # Key acceleration: assign whole chromosome blocks rather than row by row and chromosome by chromosome
         for chr_num, arr in chr_blocks:
             col_start = chr_num * 3
             output_matrix[:arr.shape[0], col_start:col_start + 3] = arr
@@ -4264,23 +4270,25 @@ def single_newtoboth(filepath1, output_dir, num1, chr_series):
 
 def get_chr_name(chr_num, chr_series):
     """
-    根据染色体序号获取染色体名称
-    参数：
-        chr_num: 第几个染色体（从1开始）
-        chr_series: 染色体映射 Series
-    返回：
-        染色体名称字符串（如 'chr1', 'chrX'）
+    Get chromosome name from chromosome index.
+
+    Parameters:
+        chr_num: ordinal chromosome index, starting from 1.
+        chr_series: chromosome mapping Series.
+
+    Returns:
+        Chromosome name string, e.g., 'chr1' or 'chrX'.
     """
     chr_num = int(chr_num)
     if chr_series is not None:
         try:
-            # chr_num 是从1开始的，所以要减1
+            # chr_num is 1-based, so subtract 1
             if 0 <= chr_num - 1 < len(chr_series):
                 return chr_series.index[chr_num - 1]
         except Exception as e:
-            print(f"警告：获取染色体名称失败: {e}")
+            print(f"WARNING: failed to get chromosome name: {e}")
 
-    # 如果出错或没有映射，返回数字编号
+    # If an error occurs or no mapping exists, return the numeric index
     return f"chr{chr_num}"
 
 def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
@@ -4291,19 +4299,19 @@ def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
       2. If threads > 1, convert the m+n independent raw files concurrently.
          Each worker writes only its own replicate-numbered output files, so filenames do not collide.
     """
-    # 没必要检查目录是否存在了，因为main函数主逻辑检查过了
-    # 获取两个基因型目录中所有 不重复的 且排序了的 染色体号->数值的Series
+    # No need to check directory existence here because main already checked it
+    # Get the sorted Series mapping all unique chromosome labels across the two genotype directories to numeric indices
     chr_series = scan_all_files_for_chr_mapping_fast(m, n, dir1, dir2)
-    print(f"映射关系: {chr_series}")
+    print(f"Mapping: {chr_series}")
 
     threads = max(1, int(threads))
     tasks = []
 
-    # 循环m+n次，分别处理两个基因型的文件。任务顺序保持原版：dir1 全部在前，dir2 全部在后。
+    # Loop m+n times to process files from both genotype directories. Keep the original task order: all dir1 files first, then all dir2 files.
     for i in range(1, m + 1):
         filepath = os.path.join(dir1, f"{i}-{os.path.basename(dir1)}.txt")
         if not os.path.exists(filepath):
-            print(f"警告: 文件不存在 {filepath}")
+            print(f"WARNING: file does not exist {filepath}")
             continue
         tasks.append({
             "filepath": filepath,
@@ -4316,7 +4324,7 @@ def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
     for j in range(1, n + 1):
         filepath = os.path.join(dir2, f"{j}-{os.path.basename(dir2)}.txt")
         if not os.path.exists(filepath):
-            print(f"警告: 文件不存在 {filepath}")
+            print(f"WARNING: file does not exist {filepath}")
             continue
         tasks.append({
             "filepath": filepath,
@@ -4328,7 +4336,7 @@ def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
 
     if threads <= 1 or len(tasks) <= 1:
         for task in tasks:
-            print(f"处理文件{task['filepath']}")
+            print(f"Processing file {task['filepath']}")
             single_newtoboth(task["filepath"], task["output_dir"], task["num"], chr_series)
     else:
         max_workers = min(threads, len(tasks))
@@ -4338,7 +4346,7 @@ def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
             safe_label = sanitize_filename(task["label"])
             task["log_file"] = os.path.join(log_dir, f"newtoboth_{safe_label}.log")
 
-        print(f"启用并行 newtoboth 文件转换: workers={max_workers}, tasks={len(tasks)}")
+        print(f"Enabled parallel newtoboth file conversion: workers={max_workers}, tasks={len(tasks)}")
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             future_to_task = {executor.submit(_run_newtoboth_worker, task): task for task in tasks}
             for idx, future in enumerate(as_completed(future_to_task), 1):
@@ -4356,28 +4364,28 @@ def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
     return chr_series
 
 def sanitize_filename(name):
-    """清理文件名中的不允许在文件名中出现的特殊字符"""
-    return re.sub(r'[\\/*?:"<>|]', "", name)  # 将name中的特殊字符替换为空，以使其无害化
+    """Sanitize special characters that are not allowed in file names."""
+    return re.sub(r'[\\/*?:"<>|]', "", name)  # Replace special characters in the name to make it safe
 
 
 def get_column_count(file_path):
-    """获取文件的列数并返回列数除以3的结果"""
+    """Return the file column count divided by 3."""
     try:
         with open(file_path, 'r') as file:
             first_line = file.readline().strip()
             column_count = len(first_line.split())
             return column_count // 3
     except Exception as e:
-        print(f"读取文件时发生错误: {e}")
+        print(f"Error while reading file: {e}")
         return None
 
 
 def parse_filename(filename):
-    """解析单个文件名，使用正则表达式提取文件编号和甲基化类型"""
-    # 用捕获组（这里有括号的部分）捕获对应的文件序号和甲基化类型
+    """Parse a file name and extract the replicate index and methylation type using a regular expression."""
+    # Use capturing groups(the parenthesized parts here)to capture the file index and methylation type
     pattern = r'^(\d+)-bothMeUnme_diffChromo_NOREPEATED_methy_sites_(.+)\.txt$'
-    match = re.match(pattern, filename)  # 将特定的文件名和此正则表达式进行匹配
-    if match:  # 匹配到后，用match.group(i)获取对应第i个捕获组的内容
+    match = re.match(pattern, filename)  # Match the file name against this regular expression
+    if match:  # After matching, use match.group(i) to get the i-th captured group
         file_id = int(match.group(1))
         methylation_type = match.group(2)
         return file_id, methylation_type
@@ -4385,110 +4393,114 @@ def parse_filename(filename):
 
 
 def scan_sample_files_by_replicates(sample_dir, max_replicates):
-    """在sample_dir目录中，搜寻出序号 1~max_replicates-both...甲基化类型.txt 文件"""
-    files_by_replicates = {}  # 创建字典用于根据前端的序号存储对应的文件名
+    """Search sample_dir for files of the form 1~max_replicates-both...methylation_type.txt."""
+    files_by_replicates = {}  # Create a dictionary to store file names by replicate index
     methylation_types = ['CpG', 'CHH', 'CHG']
-    # 若不存在对应目录，则返回空字典，这步合并后可省略，因为main函数中一开始就判断了
+    # If the directory does not exist, return an empty dictionary; this can be omitted after merging because main checks this at the beginning
     # if not os.path.exists(sample_dir):
     #     return files_by_replicates
 
-    # 遍历该文件夹中的所有内容（包括文件和子目录）
+    # Iterate over all entries in this folder, including files and subdirectories
     for filename in os.listdir(sample_dir):
-        if filename.endswith('.txt'):  # 若找到txt文件（只有可能是both文件或新格式文件）
-            parsed = parse_filename(filename)  # 解析该文件获取可能存在的 序号,甲基化类型
-            if parsed:  # 如果对于该文件解析到了 序号，甲基化类型
-                file_id, methylation_type = parsed  # （元组，逗号是元组的标志，括号只是为了为避免歧义的产物）
-                if file_id <= max_replicates and methylation_type in methylation_types:  # 序号和甲基化类型都合法
+        if filename.endswith('.txt'):  # If a txt file is found (it can only be a both file or a new-format file)
+            parsed = parse_filename(filename)  # Parse the file to obtain a possible replicate index and methylation type
+            if parsed:  # If the replicate index and methylation type were parsed from this file
+                file_id, methylation_type = parsed  # A tuple is indicated by the comma; parentheses are only used to avoid ambiguity
+                if file_id <= max_replicates and methylation_type in methylation_types:  # Both replicate index and methylation type are valid
                     if file_id not in files_by_replicates:
-                        files_by_replicates[file_id] = {}  # 使得files_by_replicates这个字典成为 file_id->{子字典}
-                    files_by_replicates[file_id][methylation_type] = filename  # 使得子字典中格式为 甲基化类型->filename
-    return files_by_replicates  # 就是返回一个链路 序号->甲基化类型->文件名 ，可以通过序号和甲基化类型获取到对应文件名
+                        files_by_replicates[file_id] = {}  # Make files_by_replicates become file_id->{sub-dictionary}
+                    files_by_replicates[file_id][methylation_type] = filename  # Make the sub-dictionary format methylation type->filename
+    return files_by_replicates  # This returns a mapping chain replicate index->methylation type->file name , so the file name can be retrieved by replicate index and methylation type
 
 
 def process_methylation_type_with_collection(file1_path, file2_path, methylation_type, output_dir,
                                              dir1_name, dir2_name, chr_num, meth_diff_threshold=0.0):
-    """处理甲基化类型和染色体的Fisher检验 处理1次检验的一个染色体
-    参数解释：file_path-当前处理的both文件的相对路径
-    methylation_type-当前处理的甲基化类型
-    output_dir-输出文件夹./output_x_y/
-    dir_name-输入的两个基因型目录路径的最后一个部分
-    chr_num-处理的第几个染色体，而不是染色体号"""
+    """
+    Run Fisher tests for one methylation type and one chromosome in a single comparison.
 
-    print(f"      处理甲基化类型 {methylation_type}，染色体 {chr_num}...")
+    Parameters:
+        file_path: relative path of the current both-format file.
+        methylation_type: current methylation context.
+        output_dir: output directory, e.g., ./output_x_y/.
+        dir_name: final path component of the two genotype input directories.
+        chr_num: ordinal chromosome index, not the chromosome label.
+    """
 
-    # 计算当前染色体的数据列
-    mOrder = 3 * (chr_num - 1)  # 这里的chr_num是第几个染色体，而不是染色体号！！！
+    print(f"      Processing methylation context {methylation_type}; chromosome {chr_num}...")
+
+    # Calculate data columns for the current chromosome
+    mOrder = 3 * (chr_num - 1)  # Here chr_num means the ordinal chromosome index, not the chromosome label
     usecols = [mOrder, mOrder + 1, mOrder + 2]
 
     try:
-        # 分块读取第一个文件的所有数据到字典
+        # Read all data from the first file into a dictionary in chunks
         data1_dict = {}
         for chunk in pd.read_csv(file1_path, sep=r'\s+', header=None, usecols=usecols, chunksize=100000):
             chunk.columns = ['pos', 'methy', 'unmethy']
-            # 用zip每次获取对应列的一个元素，共三个元素放到(pos,methy,unmethy)元组中
+            # Use zip to retrieve one value from each relevant column and pack the three values into a (pos, methy, unmethy) tuple
             for pos, methy, unmethy in zip(chunk['pos'].values, chunk['methy'].values, chunk['unmethy'].values):
-                # 按照如下格式将数据放入对应字典中
+                # Put data into the corresponding dictionary in the following format
                 data1_dict[pos] = (methy, unmethy)
-        # 至此第一个文件的所有位点数据都录入了data1_dict字典中
+        # At this point, all site data from the first file have been loaded into data1_dict
 
-        # 分块读取第二个文件并查找共同位点，这是因为如果同时将两个文件的所有数据读到内存里，可能会占用太大的内存
-        # 而第一个文件必须全部载入内存，因为我们需要对它进行快速的随机查找以确认某个位点是否在两个文件中都有，都有的话就得检验
-        # 这里reader由于有chunksize这个参数，所以read_csv的返回值是一个迭代器，遍历它每次可以每次最多返回100000行数据
+        # Read the second file in chunks and look for common sites because loading both files fully may consume too much memory
+        # The first file must be fully loaded because fast random lookup is needed to check whether a site exists in both files and should be tested
+        # Because chunksize is set, read_csv returns an iterator; each iteration returns at most 100000 rows
         reader2 = pd.read_csv(file2_path, sep=r'\s+', header=None, usecols=usecols, chunksize=100000)
 
     except Exception as e:
-        print(f"        加载数据失败: {e}")
+        print(f"        Failed to load data: {e}")
         return False
 
-    # 创建输出文件夹:output_x_y/甲基化类型/
+    # Create output folder:output_x_y/methylation type/
     methylation_dir = os.path.join(output_dir, methylation_type)
     os.makedirs(methylation_dir, exist_ok=True)
 
-    # 创建输出文件路径
+    # Create output file path
     stats_filename = os.path.join(methylation_dir,
                                   f"FET_results_{methylation_type}_{dir1_name}_{dir2_name}_Chr{chr_num}.txt")
     all_output = os.path.join(methylation_dir, f"all_simple_Chr{chr_num}.txt")
     sig_output = os.path.join(methylation_dir, f"sig_simple_Chr{chr_num}.txt")
     combine_output = os.path.join(methylation_dir, f"combineResult_Chr{chr_num}.txt")
 
-    # 设置参数
+    # Set parameters
     M0, M2, Th_pValue = 2, 4, 0.05
 
     try:
-        # 创建四个列表用于存储各类数据以便后续输出
+        # Create four lists to store different types of data for later output
         all_results, sig_results, fet_results, combine_results = [], [], [], []
 
-        # 处理第二个文件的每个数据块
+        # Process each data chunk from the second file
         for chunk2 in reader2:
             chunk2.columns = ['pos', 'methy', 'unmethy']
-            # 对于第二个文件的每个数据块，遍历每一行三个值，存储到pos,m2,u2中
+            # For each chunk from the second file, iterate over each row and store the three values in pos, m2, and u2
             for pos, m2, u2 in zip(chunk2['pos'].values, chunk2['methy'].values, chunk2['unmethy'].values):
-                # 若该位点在第一个文件也存在，说明要进行该位点的fisher检验
+                # If the site also exists in the first file, perform Fisher test for this site
                 if pos in data1_dict:
-                    m1, u1 = data1_dict[pos]  # 获取第一个文件的两个数
+                    m1, u1 = data1_dict[pos]  # Get the two counts from the first file
 
-                    if m1 >= M0 or m2 >= M0:  # 两个methy读段数都要>=2才可能进行下一步
-                        if (m1 + u1 >= M2) and (m2 + u2 >= M2):  # 每个文件的两个数之和都要>=4才进行检验
-                            cont_table = np.array([[m1, u1], [m2, u2]])  # 建立2*2列联表
-                            # 计算两个甲基化率
+                    if m1 >= M0 or m2 >= M0:  # Both methylated read counts must be >= 2 before proceeding
+                        if (m1 + u1 >= M2) and (m2 + u2 >= M2):  # The total count in each file must be >= 4 before testing
+                            cont_table = np.array([[m1, u1], [m2, u2]])  # Build the 2x2 contingency table
+                            # Calculate the two methylation rates
                             ratio1 = m1 / (m1 + u1) if (m1 + u1) > 0 else 0
                             ratio2 = m2 / (m2 + u2) if (m2 + u2) > 0 else 0
                             meth_diff = abs(ratio1 - ratio2)
-                            change = "1" if ratio1 >= ratio2 else "0"  # 根据两个文件的甲基化比率判断
-                            # 突变型的甲基化率是否升高了
-                            # 调用库函数进行fisher检验，获取到该次检验的pvalue
+                            change = "1" if ratio1 >= ratio2 else "0"  # Determine direction from methylation ratios in the two files
+                            # whether the mutant methylation rate increased
+                            # Call the library Fisher test and obtain the p-value
                             _, pvalue = fisher_exact(cont_table, alternative='two-sided')
-                            # 为pvalue保留7位有效数字
+                            # Keep 7 significant digits for the p-value
                             pvalue = float(f"{pvalue:.7g}")
-                            # 为四个文件分别录入需要的数据，其中只有显著的才录入sig_results中
+                            # Append required data to the four output lists; only significant records are appended to sig_results
                             all_results.append([pos, pvalue, change, meth_diff])
                             fet_results.append([pos, m1, u1, m2, u2, pvalue, meth_diff])
                             combine_results.append([pos, m1, u1, m2, u2, meth_diff])
 
                             if pvalue < Th_pValue:
                                 sig_results.append([pos, pvalue, change, meth_diff])
-        # 至此，这组文件（特定x_y特定甲基化类型特定染色体）所有需要进行的fisher检验已完成
-        # 保存结果到磁盘中
+        # At this point, all required Fisher tests for this file pair, methylation type, and chromosome are complete
+        # Save results to disk
         if all_results:
             pd.DataFrame(all_results, columns=["Position", "Pvalue", "Methylation_Change", "MethDiff"]).to_csv(all_output, sep='\t',
                                                                                                    index=False)
@@ -4500,207 +4512,211 @@ def process_methylation_type_with_collection(file1_path, file2_path, methylation
             pd.DataFrame(combine_results, columns=["Position", "Methy1", "Unmethy1", "Methy2", "Unmethy2", "MethDiff"]).to_csv(
                 combine_output, sep='\t', index=False)
 
-        print(f"        染色体 {chr_num} 处理完成！共处理 {len(all_results)} 个位点，其中 {len(sig_results)} 个显著")
+        print(f"        chromosome {chr_num} processing completed; processed {len(all_results)}  sites,including {len(sig_results)}  significant sites")
         return True
 
     except Exception as e:
-        print(f"        处理甲基化类型 {methylation_type}，染色体 {chr_num} 时发生错误: {e}")
+        print(f"        Processing methylation context {methylation_type}; chromosome {chr_num} error occurred: {e}")
         return False
 
 def process_methylation_type_with_collection_pvfilter(file1_path, file2_path, methylation_type, output_dir,
                                              dir1_name, dir2_name, chr_num, meth_diff_threshold=0.0):
-    """处理甲基化类型和染色体的Fisher检验 处理1次检验的一个染色体
-    参数解释：file_path-当前处理的both文件的相对路径
-    methylation_type-当前处理的甲基化类型
-    output_dir-输出文件夹./output_x_y/
-    dir_name-输入的两个基因型目录路径的最后一个部分
-    chr_num-处理的第几个染色体，而不是染色体号
+    """
+    Run Fisher tests for one methylation type and one chromosome in a single comparison.
 
-    返回此次的pvalue>0.05的df
-        all_results.append([pos, pvalue, change])
+    Parameters:
+        file_path: relative path of the current both-format file.
+        methylation_type: current methylation context.
+        output_dir: output directory, e.g., ./output_x_y/.
+        dir_name: final path component of the two genotype input directories.
+        chr_num: ordinal chromosome index, not the chromosome label.
+
+    Returns:
+        DataFrame for pvalue > 0.05 records from this test.
+        all_results rows have the form [pos, pvalue, change].
     """
 
-    print(f"      处理甲基化类型 {methylation_type}，染色体 {chr_num}...")
+    print(f"      Processing methylation context {methylation_type}; chromosome {chr_num}...")
 
-    # 计算当前染色体的数据列
-    mOrder = 3 * (chr_num - 1)  # 这里的chr_num是第几个染色体，而不是染色体号！！！
+    # Calculate data columns for the current chromosome
+    mOrder = 3 * (chr_num - 1)  # Here chr_num means the ordinal chromosome index, not the chromosome label
     usecols = [mOrder, mOrder + 1, mOrder + 2]
 
     try:
-        # 分块读取第一个文件的所有数据到字典
+        # Read all data from the first file into a dictionary in chunks
         data1_dict = {}
         for chunk in pd.read_csv(file1_path, sep=r'\s+', header=None, usecols=usecols, chunksize=100000):
             chunk.columns = ['pos', 'methy', 'unmethy']
-            # 用zip每次获取对应列的一个元素，共三个元素放到(pos,methy,unmethy)元组中
+            # Use zip to retrieve one value from each relevant column and pack the three values into a (pos, methy, unmethy) tuple
             for pos, methy, unmethy in zip(chunk['pos'].values, chunk['methy'].values, chunk['unmethy'].values):
-                # 按照如下格式将数据放入对应字典中
+                # Put data into the corresponding dictionary in the following format
                 data1_dict[pos] = (methy, unmethy)
-        # 至此第一个文件的所有位点数据都录入了data1_dict字典中
+        # At this point, all site data from the first file have been loaded into data1_dict
 
-        # 分块读取第二个文件并查找共同位点，这是因为如果同时将两个文件的所有数据读到内存里，可能会占用太大的内存
-        # 而第一个文件必须全部载入内存，因为我们需要对它进行快速的随机查找以确认某个位点是否在两个文件中都有，都有的话就得检验
-        # 这里reader由于有chunksize这个参数，所以read_csv的返回值是一个迭代器，遍历它每次可以每次最多返回100000行数据
+        # Read the second file in chunks and look for common sites because loading both files fully may consume too much memory
+        # The first file must be fully loaded because fast random lookup is needed to check whether a site exists in both files and should be tested
+        # Because chunksize is set, read_csv returns an iterator; each iteration returns at most 100000 rows
         reader2 = pd.read_csv(file2_path, sep=r'\s+', header=None, usecols=usecols, chunksize=100000)
 
     except Exception as e:
-        print(f"        加载数据失败: {e}")
+        print(f"        Failed to load data: {e}")
         return False
 
-    # 创建输出文件夹:output_x_y/甲基化类型/
+    # Create output folder:output_x_y/methylation type/
     methylation_dir = os.path.join(output_dir, methylation_type)
     os.makedirs(methylation_dir, exist_ok=True)
 
-    # 创建输出文件路径
+    # Create output file path
     stats_filename = os.path.join(methylation_dir,
                                   f"FET_results_{methylation_type}_{dir1_name}_{dir2_name}_Chr{chr_num}.txt")
     all_output = os.path.join(methylation_dir, f"all_simple_Chr{chr_num}.txt")
     sig_output = os.path.join(methylation_dir, f"sig_simple_Chr{chr_num}.txt")
     combine_output = os.path.join(methylation_dir, f"combineResult_Chr{chr_num}.txt")
 
-    # 设置参数
+    # Set parameters
     M0, M2, Th_pValue = 2, 4, 0.05
 
     try:
-        # 创建四个列表用于存储各类数据以便后续输出
+        # Create four lists to store different types of data for later output
         all_results, sig_results, fet_results, combine_results = [], [], [], []
 
-        # 处理第二个文件的每个数据块
+        # Process each data chunk from the second file
         for chunk2 in reader2:
             chunk2.columns = ['pos', 'methy', 'unmethy']
-            # 对于第二个文件的每个数据块，遍历每一行三个值，存储到pos,m2,u2中
+            # For each chunk from the second file, iterate over each row and store the three values in pos, m2, and u2
             for pos, m2, u2 in zip(chunk2['pos'].values, chunk2['methy'].values, chunk2['unmethy'].values):
-                # 若该位点在第一个文件也存在，说明要进行该位点的fisher检验
+                # If the site also exists in the first file, perform Fisher test for this site
                 if pos in data1_dict:
-                    m1, u1 = data1_dict[pos]  # 获取第一个文件的两个数
+                    m1, u1 = data1_dict[pos]  # Get the two counts from the first file
 
-                    if m1 >= M0 or m2 >= M0:  # 两个methy读段数都要>=2才可能进行下一步
-                        if (m1 + u1 >= M2) and (m2 + u2 >= M2):  # 每个文件的两个数之和都要>=4才进行检验
-                            cont_table = np.array([[m1, u1], [m2, u2]])  # 建立2*2列联表
-                            # 计算两个甲基化率
+                    if m1 >= M0 or m2 >= M0:  # Both methylated read counts must be >= 2 before proceeding
+                        if (m1 + u1 >= M2) and (m2 + u2 >= M2):  # The total count in each file must be >= 4 before testing
+                            cont_table = np.array([[m1, u1], [m2, u2]])  # Build the 2x2 contingency table
+                            # Calculate the two methylation rates
                             ratio1 = m1 / (m1 + u1) if (m1 + u1) > 0 else 0
                             ratio2 = m2 / (m2 + u2) if (m2 + u2) > 0 else 0
                             meth_diff = abs(ratio1 - ratio2)
-                            change = "1" if ratio1 > ratio2 else "0"  # 根据两个文件的甲基化比率判断
-                            # 突变型的甲基化率是否升高了
-                            # 调用库函数进行fisher检验，获取到该次检验的pvalue
+                            change = "1" if ratio1 > ratio2 else "0"  # Determine direction from methylation ratios in the two files
+                            # whether the mutant methylation rate increased
+                            # Call the library Fisher test and obtain the p-value
                             _, pvalue = fisher_exact(cont_table, alternative='two-sided')
-                            # 为pvalue保留7位有效数字
+                            # Keep 7 significant digits for the p-value
                             pvalue = float(f"{pvalue:.7g}")
-                            # 为四个文件分别录入需要的数据，其中只有显著的才录入sig_results中
+                            # Append required data to the four output lists; only significant records are appended to sig_results
                             all_results.append([pos, pvalue, change, meth_diff])
                             fet_results.append([pos, m1, u1, m2, u2, pvalue, meth_diff])
                             combine_results.append([pos, m1, u1, m2, u2, meth_diff])
 
                             if pvalue < Th_pValue:
                                 sig_results.append([pos, pvalue, change, meth_diff])
-        # 至此，这组文件（特定x_y特定甲基化类型特定染色体）所有需要进行的fisher检验已完成
-        # 保存结果到磁盘中
+        # At this point, all required Fisher tests for this file pair, methylation type, and chromosome are complete
+        # Save results to disk
         if all_results:
-            # 转换为DataFrame方便筛选
+            # Convert to DataFrame for filtering
             all_df = pd.DataFrame(all_results, columns=["Position", "Pvalue", "Methylation_Change", "MethDiff"])
             sig_df = pd.DataFrame(sig_results, columns=["Position", "Pvalue", "Methylation_Change", "MethDiff"])
             fet_df = pd.DataFrame(fet_results,
                                   columns=["Position", "Methy1", "Unmethy1", "Methy2", "Unmethy2", "Pvalue", "MethDiff"])
             combine_df = pd.DataFrame(combine_results, columns=["Position", "Methy1", "Unmethy1", "Methy2", "Unmethy2", "MethDiff"])
 
-            all_df_ndmp = all_df[all_df['Pvalue'] > 0.05]  # 保留pvalue>0.05的信息，后续补充到qvalue列表里
+            all_df_ndmp = all_df[all_df['Pvalue'] > 0.05]  # Keep pvalue > 0.05 records for later addition to the q-value list
 
-            # 只保留 p≤0.05 的位点
-            all_df = all_df[all_df['Pvalue'] <= 0.05]  # 筛选pvalue<=0.05的进行FDR检验
-            fet_df = fet_df[fet_df['Pvalue'] <= 0.05]  # 筛选pvalue<=0.05的进行FDR检验
+            # Keep only sites with p <= 0.05
+            all_df = all_df[all_df['Pvalue'] <= 0.05]  # Filter pvalue <= 0.05 records for FDR correction
+            fet_df = fet_df[fet_df['Pvalue'] <= 0.05]  # Filter pvalue <= 0.05 records for FDR correction
             #fet_df_ndmp = all_df[all_df['Pvalue'] > 0.05]
-            # sig_df 本来就是 p<0.05，不需要再筛选
+            # sig_df already contains p < 0.05 records, so no additional filtering is needed
 
-            # 也筛选 combine
+            # Also filter combine
             positions_to_keep = set(all_df['Position'].values)
-            combine_df = combine_df[combine_df['Position'].isin(positions_to_keep)]  # 筛选pvalue<=0.05的进行FDR检验
+            combine_df = combine_df[combine_df['Position'].isin(positions_to_keep)]  # Filter pvalue <= 0.05 records for FDR correction
             #combine_df_ndmp = combine_df[~combine_df['Position'].isin(positions_to_keep)]
-            # 保存筛选后的结果
+            # Save the filtered results
             all_df.to_csv(all_output, sep='\t', index=False)
             sig_df.to_csv(sig_output, sep='\t', index=False)
             fet_df.to_csv(stats_filename, sep='\t', index=False)
             combine_df.to_csv(combine_output, sep='\t', index=False)
 
         print(
-            f"        染色体 {chr_num} 处理完成！原始检验 {len(all_results)} 个位点，筛选后(p≤0.05) {len(all_df)} 个位点，p>0.05的共{len(all_df_ndmp)}个位点")
+            f"        chromosome {chr_num} processing completed; raw tests = {len(all_results)}  sites,after filtering (p <= 0.05): {len(all_df)}  sites,p > 0.05: {len(all_df_ndmp)} sites")
         return all_df_ndmp
     #                   all_results.append([pos, pvalue, change])
     #                   fet_results.append([pos, m1, u1, m2, u2, pvalue])
     #               combine_results.append([pos, m1, u1, m2, u2])
 
     except Exception as e:
-        print(f"        处理甲基化类型 {methylation_type}，染色体 {chr_num} 时发生错误: {e}")
+        print(f"        Processing methylation context {methylation_type}; chromosome {chr_num} error occurred: {e}")
         return False
 
 def merge_fet_results_and_fdr(output_dir, replicate_x, replicate_y, mtype3, all_dfs_ndmp_dict, n_chromosomes, is_twostep_context=False):
-    """合并output文件夹中的所有FET结果并进行FDR校正
-    其中FET文件的格式如：pos, m1, u1, m2, u2, pvalue
-    这里输入的output_dir是output_x_y/甲基化类型
-    success_dfs_dict[methylation_type][chr_num]访问的是
-                    对应次pvalue>0.05的df
-                      all_results([pos, pvalue, change])
-    n_chromosomes是总染色体数
-                      """
-    print(f"\n    合并 {output_dir} 中的FET结果并进行FDR校正...")
+    """
+    Merge all FET result files in one output directory and perform FDR correction.
+    FET files have the form: pos, m1, u1, m2, u2, pvalue.
+    The input output_dir is output_x_y/methylation_type.
+    success_dfs_dict[methylation_type][chr_num] accesses the corresponding pvalue > 0.05 DataFrame:
+        all_results([pos, pvalue, change]).
+    n_chromosomes is the total chromosome count.
+    """
+    print(f"\n    Merging {output_dir}  FET results and performing FDR correction...")
 
     if not os.path.exists(output_dir):
-        print(f"    错误：目录 {output_dir} 不存在！")
+        print(f"    ERROR: directory {output_dir} does not exist.")
         return False, get_dmp_threshold(mtype3)
 
-    # 搜索所有FET结果文件
-    # 这里**表示任意深度的子目录，所以这里glob在递归搜索（recursive=True）时就会在output_dir目录下、以及其
-    # 所有子目录下搜寻符合条件的文件，并将符合条件的文件路径（从output_dir开始的相对路径）以列表的形式返回
-    file_pattern = os.path.join(output_dir, "**", "FET_results_*_Chr*.txt") # 这里的染色体号实际上是both文件中的第几个三列
+    # Search all FET result files
+    # Here ** means subdirectories at any depth; with recursive=True, glob searches under output_dir and all of its
+    # subdirectories for matching files and returns matching relative paths from output_dir as a list
+    file_pattern = os.path.join(output_dir, "**", "FET_results_*_Chr*.txt") # Here the chromosome number actually means the index of the three-column block in the both file
     fet_files = glob.glob(file_pattern, recursive=True)
 
     if not fet_files:
-        print(f"    警告：在 {output_dir} 中未找到FET结果文件")
+        print(f"    WARNING: no {output_dir}  FET result files found in ")
         return False, get_dmp_threshold(mtype3)
 
-    print(f"    找到 {len(fet_files)} 个FET结果文件")
+    print(f"    Found {len(fet_files)}  FET result files")
 
-    # 创建列表用于收集所有p值和相关信息
+    # Create a list to collect all p-values and related information
     all_data = []
 
     for file_path in sorted(fet_files):
-        # 提取甲基化类型和染色体信息
-        # 这里第一个捕获组用于捕获甲基化类型，.*为零次或多次任意字符，用于匹配replicatex_replicatey，第二个捕获组用于捕获染色体号
-        #                                                   # 这里的染色体号实际上是both文件中的第几个三列
+        # Extract methylation type and chromosome information
+        # The first capturing group captures methylation type, .* matches replicatex_replicatey, and the second captures chromosome number
+        # # Here the chromosome number actually means the index of the three-column block in the both file
         methy_match = re.search(r'/FET_results_([^_]+)_.*_Chr(\d+)\.txt$', file_path.replace('\\', '/'))
         if not methy_match:
             continue
 
-        # 获取到甲基化类型和染色体序号（这里的染色体号是both文件中的第几个三列）
+        # Get methylation type and chromosome index(chromosome numberboth)
         methylation_type = mtype3
         chr_num = int(methy_match.group(2))
 
         try:
             df = pd.read_csv(file_path, sep='\t', header=0)
             if 'Position' in df.columns and 'Pvalue' in df.columns:
-                # 调整列顺序：Chromosome, Methylation_Type, Position, Pvalue
+                # Adjust column order:Chromosome, Methylation_Type, Position, Pvalue
                 df_subset = df[['Position', 'Pvalue', 'MethDiff']].copy()
                 df_subset['Chromosome'] = chr_num
                 df_subset['Methylation_Type'] = methylation_type
 
-                # 重新排列列顺序
+                # Reorder columns
                 df_subset = df_subset[['Chromosome', 'Methylation_Type', 'Position', 'Pvalue', 'MethDiff']]
-                all_data.append(df_subset) # 将当前FET的所有信息加入all_data中
+                all_data.append(df_subset) # Append all information for the current FET file to all_data
         except Exception as e:
-            print(f"    警告：读取 {file_path} 失败: {e}")
+            print(f"    WARNING: read {file_path} failed: {e}")
             continue
 
     if not all_data:
-        print(f"    错误：没有成功读取任何数据")
+        print(f"    ERROR: no data were successfully read")
         return False, get_dmp_threshold(mtype3)
 
-    # 合并所有数据（由于上面是直接将每个文件对应的dataframe追加到all_data末尾，所以列表中每个元素都是一个dataframe，因此需要合并）
+    # Merge all data(Since each file-specific DataFrame was appended to all_data, each list element is a DataFrame and must be concatenated)
     combined_df = pd.concat(all_data, ignore_index=True)
-    # 将数据根据染色体序号排序（这里的染色体号实际上是both文件中的第几个三列）
+    # Sort data by chromosome index(Here the chromosome number actually means the index of the three-column block in the both file)
     combined_df = combined_df.sort_values(['Methylation_Type', 'Chromosome', 'Position'])
-    # 该dataframe格式如下：'Chromosome', 'Methylation_Type', 'Position', 'Pvalue'
-    print(f"    合并后总共 {len(combined_df)} 个位点")
+    # The DataFrame format is as follows:'Chromosome', 'Methylation_Type', 'Position', 'Pvalue'
+    print(f"    After merging, total sites = {len(combined_df)}  sites")
 
-    # 计算FDR校正的q值并将其向右增加到combined_df中
+    # Calculate FDR-corrected q-values and append them to combined_df
     pvalues = combined_df['Pvalue'].values
     qvalues = calculate_qvalues(pvalues, 1.0)
     combined_df['Qvalue'] = qvalues
@@ -4709,9 +4725,9 @@ def merge_fet_results_and_fdr(output_dir, replicate_x, replicate_y, mtype3, all_
     dmp_threshold_to_use = fixed_dmp_threshold
     auto_q_info = None
 
-    # 自动q-value阈值只用于“两步法”上下文：
-    # 即该context已经先按 p<=AUTO_QVALUE_P_CUTOFF 预筛选，再在预筛子集内计算FDR。
-    # 非两步法context不启用，避免把全量FDR的q值曲线误用于该规则。
+    # Use automatic q-value thresholds only in two-step contexts:
+    # i.e., this context has first been prefiltered by p <= AUTO_QVALUE_P_CUTOFF and then FDR-corrected within the prefiltered subset.
+    # Disable this for non-two-step contexts to avoid applying this rule to the full-FDR q-value curve.
     should_estimate_auto_q = (AUTO_QVALUE_TWOSTEP or AUTO_QVALUE_REPORT_ONLY) and bool(is_twostep_context)
     if should_estimate_auto_q:
         estimated_q, auto_q_info = estimate_auto_qvalue_threshold_twostep(
@@ -4726,13 +4742,13 @@ def merge_fet_results_and_fdr(output_dir, replicate_x, replicate_y, mtype3, all_
 
         if AUTO_QVALUE_TWOSTEP and not AUTO_QVALUE_REPORT_ONLY:
             dmp_threshold_to_use = estimated_q
-            mode_msg = "用于DMP判定"
+            mode_msg = "used for DMP calling"
         else:
             dmp_threshold_to_use = fixed_dmp_threshold
-            mode_msg = "仅报告，不改变DMP判定"
+            mode_msg = "report-only; DMP calling unchanged"
 
         print(
-            f"    自动q-value阈值({mtype3}, 两步法context): "
+            f"    Auto q-value threshold ({mtype3}, two-step-FDR context): "
             f"estimated={estimated_q:.6g}, used={dmp_threshold_to_use:.6g} "
             f"({mode_msg}, status={auto_q_info.get('auto_q_status')}, "
             f"p_at_max={auto_q_info.get('auto_q_pvalue_at_max')}, "
@@ -4740,7 +4756,7 @@ def merge_fet_results_and_fdr(output_dir, replicate_x, replicate_y, mtype3, all_
             f"n={auto_q_info.get('auto_q_n_candidates')})"
         )
     elif AUTO_QVALUE_TWOSTEP or AUTO_QVALUE_REPORT_ONLY:
-        print(f"    {mtype3} 不是两步法context：不进行自动q-value阈值估计，使用固定阈值 {fixed_dmp_threshold}")
+        print(f"    {mtype3} is not a two-step-FDR context; skipping auto q-value threshold estimation and using fixed threshold {fixed_dmp_threshold}")
 
     combined_df['Qvalue_Threshold_Used'] = dmp_threshold_to_use
     combined_df['Qvalue_Threshold_Mode'] = (
@@ -4748,22 +4764,22 @@ def merge_fet_results_and_fdr(output_dir, replicate_x, replicate_y, mtype3, all_
         else "fixed"
     )
 
-    # 最终列顺序：Chromosome, Methylation_Type, Position, Pvalue, Qvalue
+    # Final column order:Chromosome, Methylation_Type, Position, Pvalue, Qvalue
     combined_df = combined_df[['Chromosome', 'Methylation_Type', 'Position', 'Pvalue', 'MethDiff', 'Qvalue',
                                'Qvalue_Threshold_Used', 'Qvalue_Threshold_Mode']]
 
-    print(f"开始处理 {mtype3} 的 ndmp 数据，")
+    print(f"Starting {mtype3}  NDMP data,")
 
-    # 首先检查 all_dfs_ndmp_dict 中该甲基化类型是否有数据，因为有可能该生物种类的该甲基化类型不需要调用filter版本
+    # First check whether all_dfs_ndmp_dict has data for this methylation type because some organisms/contexts may not require the filter version
     if mtype3 in all_dfs_ndmp_dict and all_dfs_ndmp_dict[mtype3]:
-        print(f"该甲基化类型中，ndmp的dfs数量为{len(all_dfs_ndmp_dict[mtype3])}个")
+        print(f"Number of NDMP dataframes for this methylation context: {len(all_dfs_ndmp_dict[mtype3])}")
         dfs_ndmp = []
         for chr_num11 in range(1, n_chromosomes + 1):
-            # 只处理该甲基化类型中存在的染色体
+            # Process only chromosomes present for this methylation type
             if chr_num11 in all_dfs_ndmp_dict[mtype3]:
                 df_ndmp = all_dfs_ndmp_dict[mtype3][chr_num11]
 
-                # 确保是有效的 DataFrame
+                # Ensure it is a valid DataFrame
                 if isinstance(df_ndmp, pd.DataFrame) and not df_ndmp.empty:
                     df_ndmp = df_ndmp.copy()
 
@@ -4783,44 +4799,44 @@ def merge_fet_results_and_fdr(output_dir, replicate_x, replicate_y, mtype3, all_
                                        'Qvalue_Threshold_Used', 'Qvalue_Threshold_Mode']]
 
                     dfs_ndmp.append(df_ndmp)
-                    print(f"  为 {mtype3}--{chr_num11} 添加所需列，共 {len(df_ndmp)} 个位点")
+                    print(f"  for {mtype3}--{chr_num11} added required columns; {len(df_ndmp)}  sites")
 
         if dfs_ndmp:
             total_ndmp = pd.concat(dfs_ndmp, ignore_index=True)
             combined_df = pd.concat([combined_df, total_ndmp], ignore_index=True)
-            print(f"  共合并 {len(total_ndmp)} 个 ndmp 位点")
+            print(f"  Merged {len(total_ndmp)}  NDMP sites")
         else:
-            print(f"  {mtype3} 类型未找到任何 ndmp 数据")
+            print(f"  {mtype3} context has no NDMP data")
     else:
-        print(f"  {mtype3} 类型在 ndmp 字典中不存在")
-    # 至此对于比较多的甲基化类型已加上前面舍弃的pvalue>0.05的位点的信息，
-    #   在前面要将其存储在all_dfs_ndmp_dict[甲基化][染色体号]里，此时才能实现该目的
+        print(f"  {mtype3} context is not present in the NDMP dictionary")
+    # At this point, for high-count methylation types, information for previously discarded pvalue > 0.05 sites has been added back,
+    # They must have been stored in all_dfs_ndmp_dict[methylation_type][chromosome] earlier for this to work
 
-    # 统计显著性结果，计算这 m*n*3次检验中的1次中，pvalues和qvalues显著的分别有多少个
+    # Summarize significance counts for one of the m*n*3 tests: numbers significant by p-value and q-value
     n_pval_sig = np.sum(pvalues <= 0.05)
     dmp_threshold = dmp_threshold_to_use
     n_qval_sig = np.sum(qvalues <= dmp_threshold)
-    # 计算显著的比例
-    print(f"    P值显著位点: {n_pval_sig} ({n_pval_sig / len(pvalues) * 100:.1f}%)")
-    print(f"    Q值显著位点: {n_qval_sig} ({n_qval_sig / len(qvalues) * 100:.1f}%)")
+    # Calculate significant proportions
+    print(f"    P-value significant sites: {n_pval_sig} ({n_pval_sig / len(pvalues) * 100:.1f}%)")
+    print(f"    Q-value significant sites: {n_qval_sig} ({n_qval_sig / len(qvalues) * 100:.1f}%)")
 
-    # 保存合并的p值列表（用于外部FDR工具）
+    # Save merged p-value list for external FDR tools
     pvalue_file = os.path.join(output_dir, f"united_pvalues_wt_replicate{replicate_y}_vs_mut_replicate{replicate_x}.csv")
     with open(pvalue_file, 'w') as f:
         for pvalue in pvalues:
             f.write(f"{pvalue}\n")
 
-    # 保存完整的FDR校正结果（output_dir是output_x_y/甲基化类型）
-    #  包含完整的pvalues和qvalues（格式为：Chromosome, Methylation_Type, Position, Pvalue, Qvalue）
+    # Save full FDR-corrected results(output_dir is output_x_y/methylation_type)
+    # Includes complete p-values and q-values(Format::Chromosome, Methylation_Type, Position, Pvalue, Qvalue)
     fdr_file = os.path.join(output_dir, f"FDR_corrected_results_wt_replicate{replicate_y}_vs_mut_replicate{replicate_x}.txt")
     combined_df.to_csv(fdr_file, sep='\t', index=False)
 
-    # 保存显著位点（根据甲基化类型使用固定阈值或两步法自动阈值）
+    # Save significant sites(Use fixed thresholds or two-step automatic thresholds according to methylation type)
     sig_df = combined_df[combined_df['Qvalue'] <= dmp_threshold_to_use]
-    if not sig_df.empty: # 若有显著的位点，将显著的那部分数据输出（output_dir是output_x_y/甲基化类型）
+    if not sig_df.empty: # If significant sites exist, write the significant subset(output_dir is output_x_y/methylation_type)
         sig_file = os.path.join(output_dir, f"FDR_significant_results_wt_replicate{replicate_y}_vs_mut_replicate{replicate_x}.txt")
         sig_df.to_csv(sig_file, sep='\t', index=False)
-        print(f"    显著位点结果保存至: {sig_file}")
+        print(f"    Significant-site results saved to: {sig_file}")
 
     if should_estimate_auto_q:
         save_auto_qvalue_report(
@@ -4833,14 +4849,14 @@ def merge_fet_results_and_fdr(output_dir, replicate_x, replicate_y, mtype3, all_
             report_only=AUTO_QVALUE_REPORT_ONLY or not AUTO_QVALUE_TWOSTEP,
         )
 
-    print(f"    P值列表保存至: {pvalue_file}")
-    print(f"    FDR结果保存至: {fdr_file}")
+    print(f"    P-value list saved to: {pvalue_file}")
+    print(f"    FDR results saved to: {fdr_file}")
     return True, dmp_threshold_to_use
 
 
-# 在你的代码中，将calculate_qvalues函数替换为：
+# In this code, replace calculate_qvalues with:
 def     calculate_qvalues(pvalues, pi=1.0):
-    """使用Storey方法计算Q值"""
+    """Calculate q-values using the Storey method."""
 
     pvalues = np.array(pvalues, dtype=float)
     if len(pvalues) == 0:
@@ -4855,12 +4871,12 @@ def     calculate_qvalues(pvalues, pi=1.0):
     sorted_indices = np.argsort(pvalues_clean)
     sorted_pvalues = pvalues_clean[sorted_indices]
 
-    # Storey方法的关键：包含π因子
+    # Key point of the Storey method: include the pi factor
     q_values_sorted = np.zeros_like(sorted_pvalues)
 
-    # 如果需要自动估计π
+    # If pi needs to be estimated automatically
     if pi is None:
-        # 简化的π估计
+        # Simplified pi estimation
         lrange = np.linspace(0.05, 0.95, max(int(m / 100.0), 10))
         pil = np.mean(sorted_pvalues[:, np.newaxis] > lrange, axis=0)
         pilr = pil / (1.0 - lrange)
@@ -4868,15 +4884,15 @@ def     calculate_qvalues(pvalues, pi=1.0):
         if pilr[-1] < 1.0:
             pi = pilr[-1]
 
-    # Storey方法计算
+    # Storey method calculation
     q_values_sorted = pi * m * sorted_pvalues / np.arange(1, m + 1)
     q_values_sorted[-1] = min(q_values_sorted[-1], 1.0)
 
-    # 单调性调整
+    # Monotonicity adjustment
     for i in range(m - 2, -1, -1):
         q_values_sorted[i] = min(q_values_sorted[i], q_values_sorted[i + 1])
 
-    # 恢复原顺序
+    # Restore original order
     q_values = np.zeros_like(pvalues_clean)
     q_values[sorted_indices] = q_values_sorted
     q_values[np.isnan(pvalues)] = np.nan
@@ -4884,44 +4900,44 @@ def     calculate_qvalues(pvalues, pi=1.0):
     return q_values
 
 def perform_sliding_window_on_dmp_files(output_dir, replicate_x, replicate_y,):
-    """对m*n*3次处理中的一次的结果(N)DMP文件进行滑动窗口分析"""
+    """Run sliding-window analysis on one result (N)DMP file from one of the m*n*3 tests."""
 
-    print(f"\n    开始对DMP文件进行滑动窗口分析...")
+    print(f"\n    Starting sliding-window analysis for DMP files...")
 
-    # 只处理DMP文件
+    # Process only DMP files
     dmp_patterns = [
         f"DMP_wt_replicate{replicate_y}_mut_replicate{replicate_x}_Chr*.txt",
         f"N-DMP_wt_replicate{replicate_y}_mut_replicate{replicate_x}_Chr*.txt"
     ]
 
     for pattern in dmp_patterns:
-        dmp_files = glob.glob(os.path.join(output_dir, pattern)) #找到符合当前正则表达式格式的所有文件的路径，并放入dmp_files列表中
+        dmp_files = glob.glob(os.path.join(output_dir, pattern)) # Find all file paths matching the current regex and put them into dmp_files
 
-        for dmp_file in dmp_files: # 遍历列表，每次获取一个DMP或N-DMP文件
+        for dmp_file in dmp_files: # Iterate over the list and get one DMP or N-DMP file each time
             try:
 
                 df = pd.read_csv(dmp_file, sep=r'\s+', header=None, skiprows=1,
-                                 names=['position', 'pvalue', 'change']) # 位点号、pvalue、change
+                                 names=['position', 'pvalue', 'change']) # Position, p-value, and change
 
-                # 检验数据非空
+                # Check that the data are non-empty
                 if df.empty or len(df) == 0:
                     continue
 
-                # 数据类型转换和清理
+                # Convert data types and clean data
                 df = df.dropna()
                 df['position'] = df['position'].astype(int)
                 df['change'] = df['change'].astype(int)
 
-                print(f"      处理文件: {os.path.basename(dmp_file)} ({len(df)} 个位点)")
+                print(f"      Processing file: {os.path.basename(dmp_file)} ({len(df)}  sites)")
 
-                # 设置输出前缀，其实就是将.txt去掉之后的 (N)DMP_replicate_wt{replicate_y}_mut_replicate{replicate_x}_Chr* 这一部分
+                # Set output prefix, i.e., the file name with .txt removed (N)DMP_replicate_wt{replicate_y}_mut_replicate{replicate_x}_Chr* part
                 base_name = os.path.basename(dmp_file).replace('.txt', '')
 
-                # 传入DataFrame给sliding_window_analysis
-                # 前者格式为window_start,window_end,count_change_1,count_change_0,total_count
-                # 后者没有count_change，而有standardized_count，即每个区间显著位点数与最大的那个显著位点数的比值
+                # Pass the DataFrame to sliding_window_analysis
+                # The former format is window_start, window_end, count_change_1, count_change_0, total_count
+                # The latter has no count_change but has standardized_count, the ratio of significant-site count in each interval to the maximum interval count
                 sliding_results, std_results = sliding_window_analysis(
-                    df, # df是m*n*3次中的一次的某一条染色体的dmp文件
+                    df, # df is the DMP file for one chromosome from one of the m*n*3 tests
                     window_size=1000000,
                     step_ratio=0.05,
                     save_files=True,
@@ -4929,40 +4945,40 @@ def perform_sliding_window_on_dmp_files(output_dir, replicate_x, replicate_y,):
                     outputdir1=output_dir
                 )
 
-                print(f"      完成 {base_name}: {len(sliding_results)} 个窗口")
+                print(f"      Completed {base_name}: {len(sliding_results)} windows")
 
             except Exception as e:
-                print(f"      处理 {dmp_file} 失败: {e}")
+                print(f"      Processing {dmp_file} failed: {e}")
                 continue
 
-    print(f"    滑动窗口分析完成")
+    print(f"    Sliding-window analysis completed")
 
-#下面这个版本用于处理pv<0.05筛选后再进行FDR检验的情况，比如植物的CHH和CHG
+# This version handles cases where p < 0.05 filtering is applied before FDR correction, e.g., plant CHH and CHG
 def perform_sliding_window_on_dmp_files_after_filter(output_dir, replicate_x, replicate_y,all_dfs_ndmp_dict=None, methylation_type=None):
-    """对m*n*3次处理中的一次的结果(N)DMP文件进行滑动窗口分析"""
+    """Run sliding-window analysis on one result (N)DMP file from one of the m*n*3 tests."""
 
-    print(f"\n    开始对DMP文件进行滑动窗口分析...")
+    print(f"\n    Starting sliding-window analysis for DMP files...")
 
-    # 只处理DMP文件
+    # Process only DMP files
     dmp_patterns = [
         f"DMP_wt_replicate{replicate_y}_mut_replicate{replicate_x}_Chr*.txt",
         f"N-DMP_wt_replicate{replicate_y}_mut_replicate{replicate_x}_Chr*.txt"
     ]
 
     for pattern in dmp_patterns:
-        dmp_files = glob.glob(os.path.join(output_dir, pattern)) #找到符合当前正则表达式格式的所有文件的路径，并放入dmp_files列表中
-        is_ndmp = pattern.startswith("N-DMP") # 判断当前处理的文件是否是NDMP文件
+        dmp_files = glob.glob(os.path.join(output_dir, pattern)) # Find all file paths matching the current regex and put them into dmp_files
+        is_ndmp = pattern.startswith("N-DMP") # Check whether the current file is an NDMP file
 
-        for dmp_file in dmp_files: # 遍历列表，每次获取一个DMP或N-DMP文件
+        for dmp_file in dmp_files: # Iterate over the list and get one DMP or N-DMP file each time
             try:
 
                 df = pd.read_csv(dmp_file, sep=' ', header=None, skiprows=1,
-                                 names=['position', 'pvalue', 'change']) # 位点号、pvalue、change
+                                 names=['position', 'pvalue', 'change']) # Position, p-value, and change
 
-                #如果当前文件是ndmp文件，由于不能改all_simple文件，因为那个要用来合并成一列用于FDR检验，所以就在此加上原来pv>0.05的
-                                # 那些位点的信息，这样的话，后续生成滑动窗口文件的时候，统计ndmp信息的时候才不会缺漏
+                # If the current file is an NDMP file, add the previously pvalue > 0.05 records here because all_simple cannot be modified since it is used for FDR merging
+                                # so that NDMP information is not missing when sliding-window files are generated later
                 if is_ndmp and all_dfs_ndmp_dict and methylation_type:
-                    # 从文件名提取染色体号
+                    # Extract chromosome number from file name
                     chr_match = re.search(r'Chr(\d+)\.txt$', dmp_file)
                     if chr_match:
                         chr_num = int(chr_match.group(1))
@@ -4975,31 +4991,31 @@ def perform_sliding_window_on_dmp_files_after_filter(output_dir, replicate_x, re
                                     'Pvalue': 'pvalue',
                                     'Methylation_Change': 'change'
                                 })
-                                # 合并数据
+                                # Merge data
                                 df = pd.concat([df, ndmp_df[['position', 'pvalue', 'change']]],
                                                ignore_index=True)
                                 df = df.drop_duplicates(subset=['position'])
                                 df = df.sort_values('position').reset_index(drop=True)
-                                print(f"      为 {os.path.basename(dmp_file)} 合并了之前FDR检验时忽略的 {len(ndmp_df)} 个NDMP位点")
-                # 检验数据非空
+                                print(f"      for {os.path.basename(dmp_file)} merged NDMP sites ignored by the previous FDR test: {len(ndmp_df)}  NDMP sites")
+                # Check that the data are non-empty
                 if df.empty or len(df) == 0:
                     continue
 
-                # 数据类型转换和清理
+                # Convert data types and clean data
                 df = df.dropna()
                 df['position'] = df['position'].astype(int)
                 df['change'] = df['change'].astype(int)
 
-                print(f"      处理文件: {os.path.basename(dmp_file)} ({len(df)} 个位点)")
+                print(f"      Processing file: {os.path.basename(dmp_file)} ({len(df)}  sites)")
 
-                # 设置输出前缀，其实就是将.txt去掉之后的 (N)DMP_wt_replicate{replicate_y}_mut_replicate{replicate_x}_Chr* 这一部分
+                # Set output prefix, i.e., the file name with .txt removed (N)DMP_wt_replicate{replicate_y}_mut_replicate{replicate_x}_Chr* part
                 base_name = os.path.basename(dmp_file).replace('.txt', '')
 
-                # 传入DataFrame给sliding_window_analysis
-                # 前者格式为window_start,window_end,count_change_1,count_change_0,total_count
-                # 后者没有count_change，而有standardized_count，即每个区间显著位点数与最大的那个显著位点数的比值
+                # Pass the DataFrame to sliding_window_analysis
+                # The former format is window_start, window_end, count_change_1, count_change_0, total_count
+                # The latter has no count_change but has standardized_count, the ratio of significant-site count in each interval to the maximum interval count
                 sliding_results, std_results = sliding_window_analysis(
-                    df, # df是m*n*3次中的一次的某一条染色体的dmp文件
+                    df, # df is the DMP file for one chromosome from one of the m*n*3 tests
                     window_size=1000000,
                     step_ratio=0.05,
                     save_files=True,
@@ -5007,30 +5023,33 @@ def perform_sliding_window_on_dmp_files_after_filter(output_dir, replicate_x, re
                     outputdir1=output_dir
                 )
 
-                print(f"      完成 {base_name}: {len(sliding_results)} 个窗口")
+                print(f"      Completed {base_name}: {len(sliding_results)} windows")
 
             except Exception as e:
-                print(f"      处理 {dmp_file} 失败: {e}")
+                print(f"      Processing {dmp_file} failed: {e}")
                 continue
 
-    print(f"    滑动窗口分析完成")
+    print(f"    Sliding-window analysis completed")
 
 
 def generate_dmp_files(dir1,dir2,output_dir, replicate_x, replicate_y, fdr_threshold=0.05, mtype1="CpG",
                       all_dfs_ndmp_dict=None,unfilter_mtypes=["CpG"],n_chromosomes = 5, meth_diff_threshold=0.0,
                       skip_dmr=False, skip_window=False):
-    """参数：output_dir是output_x_y/甲基化类型/,
-        replicate_x,replicate_y是处理的组号，后面是qvalues的阈值和目前处理的甲基化类型"""
+    """
+    Parameters:
+        output_dir is output_x_y/methylation_type/.
+        replicate_x and replicate_y are replicate IDs, followed by the q-value threshold and current methylation type.
+    """
 
-    print(f"\n    生成 {output_dir} 的DMP文件...")
+    print(f"\n    Generating {output_dir}  DMP files...")
 
     def safe_float_convert(value):
-        """将各种格式的数据转换为浮点数"""
+        """Convert data in multiple formats to a floating-point number."""
         try:
-            # 如果已经是数字类型，均转换为浮点数返回
+            # If already numeric, convert to float and return
             if isinstance(value, (int, float)):
                 return float(value)
-            # 如果是字符串，去除空白后转换为浮点数
+            # If string, strip whitespace and convert to float
             if isinstance(value, str):
                 value = value.strip()
                 if value:
@@ -5039,162 +5058,162 @@ def generate_dmp_files(dir1,dir2,output_dir, replicate_x, replicate_y, fdr_thres
         except (ValueError, TypeError):
             return None
 
-    # 1. 读取FDR校正结果文件(这里output_dir是output_x_y/甲基化类型/)
-    #  该文件格式为 Chromosome, Methylation_Type, Position, Pvalue, Qvalue
+    # 1. Read the FDR-corrected result file(output_dir is output_x_y/methylation_type/)
+    # The file format is Chromosome, Methylation_Type, Position, Pvalue, Qvalue
     fdr_file = os.path.join(output_dir, f"FDR_corrected_results_wt_replicate{replicate_y}_vs_mut_replicate{replicate_x}.txt")
     if not os.path.exists(fdr_file):
-        print(f"    错误：FDR结果文件不存在 {fdr_file}")
+        print(f"    ERROR: FDR result file does not exist {fdr_file}")
         return False
 
     try:
-        fdr_df = pd.read_csv(fdr_file, sep='\t') # 该文件格式为 Chromosome, Methylation_Type, Position, Pvalue, Qvalue
-        print(f"    读取FDR结果文件，共 {len(fdr_df)} 个位点")
+        fdr_df = pd.read_csv(fdr_file, sep='\t') # The file format is Chromosome, Methylation_Type, Position, Pvalue, Qvalue
+        print(f"    Read FDR result file; {len(fdr_df)}  sites")
     except Exception as e:
-        print(f"    错误：读取FDR文件失败 {e}")
+        print(f"    ERROR: failed to read FDR file {e}")
         return False
 
-    # 2. 读取各染色体的all_simple文件
+    # 2. Read all_simple files for each chromosome
     methylation_change_data = {}
     total_read_lines = 0
 
-    # (这里output_dir是output_x_y/甲基化类型/)
+    # (output_dir is output_x_y/methylation_type/)
     mtype_dir = output_dir
 
-    # 将该m*n*3次中的一次处理的所有all_simple文件的文件名获取到列表中
+    # Get the file names of all all_simple files generated for one of the m*n*3 tests
     all_simple_files = [f for f in os.listdir(mtype_dir) if f.startswith('all_simple_Chr') and f.endswith('.txt')]
 
-    # all_simple文件格式为："Position", "Pvalue", "Methylation_Change"
-    # 遍历所给一次处理的所有all_simple文件
+    # The all_simple file format is:"Position", "Pvalue", "Methylation_Change"
+    # Iterate over all all_simple files for the given test
     for file in all_simple_files:
         chr_match = re.search(r'Chr(\d+)\.txt$', file)
         if not chr_match:
             continue
 
-        chr_num = int(chr_match.group(1))# 这里的chr_num也指的是both文件的第几个三列
+        chr_num = int(chr_match.group(1))# Here chr_num also means the index of the three-column block in the both file
         file_path = os.path.join(mtype_dir, file)
 
         try:
-            with open(file_path, 'r') as f:  # 读取的all_simple文件格式为："Position", "Pvalue", "Methylation_Change"
-                lines = f.readlines() # readlines用于返回文件的所有行组成的列表，每个元素是一行
+            with open(file_path, 'r') as f:  # The read all_simple file format is:"Position", "Pvalue", "Methylation_Change"
+                lines = f.readlines() # readlines returns all file lines as a list, with each element being one line
 
             file_valid_lines = 0
-            for line_num, line in enumerate(lines, 1): #遍历每一行，其中line_num从1开始枚举
+            for line_num, line in enumerate(lines, 1): # Iterate over each line, with line_num enumerated from 1
                 line = line.strip()
-                if not line or line.startswith("Position"): # 跳过空行或首行
+                if not line or line.startswith("Position"): # Skip empty lines or the first line
                     continue
 
-                parts = line.split('\t')    #根据之前导出的时候设定的分隔符进行分割，将每次的三个数据项放到列表parts里
+                parts = line.split('\t')    # Split by the delimiter used during export and put the three fields into parts
                 if len(parts) >= 3:
-                    # 由于读入的是字符串，所以得进行类型转换，将pvalue转换为浮点数，其余两个转换为整型
+                    # Because the input is string, convert pvalue to float and the other two values to integers
                     position = int(safe_float_convert(parts[0]))
                     pvalue = safe_float_convert(parts[1])
                     change = int(safe_float_convert(parts[2]))
                     meth_diff = safe_float_convert(parts[3]) if len(parts) >= 4 else 0.0
 
-                    # 检查所有值是否有效
+                    # Check whether all values are valid
                     if (position is not None and
                             pvalue is not None and
                             change is not None):
 
-                        # 检验change是否在0,1之中
+                        # Check whether change is in {0, 1}
                         if change in [0, 1]:
-                            # 存储该映射: (chr, mtype, position) -> change 到字典中
+                            # Store this mapping: (chr, mtype, position) -> change in the dictionary
                             methylation_change_data[(chr_num, mtype1, position)] = (change, meth_diff)
                             file_valid_lines += 1
                             total_read_lines += 1
 
-            print(f"    {mtype_dir}/Chr{chr_num}: 读取 {file_valid_lines} 个有效位点")
+            print(f"    {mtype_dir}/Chr{chr_num}: read {file_valid_lines}  valid sites")
 
         except Exception as e:
-            print(f"    警告：读取 {file_path} 失败: {e}")
+            print(f"    WARNING: read {file_path} failed: {e}")
             continue
 
-    print(f"    总共读取甲基化变化方向数据: {total_read_lines} 个位点")
+    print(f"    Total methylation-change direction records read: {total_read_lines}  sites")
 
-    # 3. 合并数据，利用前面记录在字典中的(chr, mtype, position) -> change,将change这个属性添加到fdr_df的副本中
+    # 3. Merge data using the previously recorded dictionary mapping(chr, mtype, position) -> change,add the change attribute to a copy of fdr_df
     combined_data = []
     missing_change = 0
-    match_debug = defaultdict(int) #创建一个带默认值的字典，当访问不存在的键的时候，该字典会自动调用int类内置的调用函数
-                                                # 为该键创建一个键值对，并将值置为int()的返回值——0
+    match_debug = defaultdict(int) # Create a defaultdict; when a missing key is accessed, it automatically calls int()
+                                                # Create a key-value pair and set its value to int(), i.e., 0
 
-    for _, row in fdr_df.iterrows(): # fdr_df文件格式为 Chromosome, Methylation_Type, Position, Pvalue, Qvalue
+    for _, row in fdr_df.iterrows(): # fdr_df fileFormat: Chromosome, Methylation_Type, Position, Pvalue, Qvalue
         chr_num = row['Chromosome']
         mtype = row['Methylation_Type']
-        # 统一转换为浮点数进行匹配
+        # Convert uniformly to float for matching
         position = safe_float_convert(row['Position'])
         qvalue = safe_float_convert(row['Qvalue'])
 
-        # 若位点或q值缺失，则跳过当前行
+        # Skip the current row if position or q-value is missing
         if position is None or qvalue is None:
             missing_change += 1
             continue
 
-        # 查找对应的甲基化变化方向
+        # Look up the corresponding methylation-change direction
         change_key = (chr_num, mtype, position)
         if change_key in methylation_change_data:
-            change, meth_diff = methylation_change_data[change_key]  # 该change_data中存储该映射: (chr, mtype, position) -> change
+            change, meth_diff = methylation_change_data[change_key]  # change_data stores this mapping: (chr, mtype, position) -> change
             combined_data.append({
                 'chromosome': chr_num,
                 'methylation_type': mtype,
-                'position': int(position),  # 输出时转为整数
+                'position': int(position),  # Convert to integer for output
                 'qvalue': qvalue,
                 'change': change,
-                'meth_diff': meth_diff # 记录绝对甲基化差异，不过这个时候combined_data还是个列表而非dataframe
+                'meth_diff': meth_diff # Record absolute methylation difference; at this point combined_data is still a list rather than a DataFrame
             })
-            match_debug[chr_num] += 1 # 这里的chr_num也是both文件中第几个三列，从fisher检验读取Both文件就开始是这样了
+            match_debug[chr_num] += 1 # Here chr_num is also the three-column block index in the both file; this convention starts when the both file is read for Fisher tests
         else:
             missing_change += 1
 
-    print(f"    合并后有 {len(combined_data)} 个完整位点")
-    print(f"    各染色体匹配情况: {dict(match_debug)}") # 其实就是每个染色体有多少条信息
+    print(f"    After merging, {len(combined_data)}  complete sites")
+    print(f"    Per-chromosome matching summary: {dict(match_debug)}") # This is the number of records for each chromosome
     if missing_change > 0:
-        print(f"    警告：{missing_change} 个位点缺少甲基化变化方向信息")
+        print(f"    WARNING: {missing_change}  sitesmissing methylation-change direction information")
 
-    # 4. 按染色体分组生成DMP文件
-    chr_groups = defaultdict(list) # 这里的默认值字典在初始化时会调用list()函数，用[]空列表作为值
-    for item in combined_data: # 每个item是一个字典，五个键值对的值为chr_num,mtype,position,qvalue,change
+    # 4. Generate DMP files by chromosome group
+    chr_groups = defaultdict(list) # This defaultdict calls list() during initialization and uses an empty list as the value
+    for item in combined_data: # Each item is a dictionary with values for chr_num, mtype, position, qvalue, and change
         chr_groups[item['chromosome']].append(item)
-            # chr_groups这个字典将每个染色体的每一条数据（字典形式）作为一个元素记录到chr_groups->chr_num->list1这个列表中
+            # chr_groups stores each record for each chromosome as a dictionary element under chr_groups[chr_num]
 
     if not chr_groups:
-        print(f"    错误：没有找到任何可生成DMP文件的数据")
+        print(f"    ERROR:no data available for generating DMP files")
         return False
 
-    print(f"    将为以下染色体生成DMP文件: {sorted(chr_groups.keys())}")
+    print(f"    DMP files will be generated for chromosomes: {sorted(chr_groups.keys())}")
 
     dir1_name = f"replicate{replicate_x}"
     dir2_name = f"replicate{replicate_y}"
 
     total_dmp = total_ndmp = total_hyper = total_hypo = 0
 
-    # 为每个染色体生成文件
-    for chr_num in sorted(chr_groups.keys()): # 这里的keys是染色体序号，序号-1就是一开始的全染色体映射里的索引，因为那个是从零开始算的
-        chr_data = chr_groups[chr_num]  # chr_groups这个字典将每个染色体的每一条数据（字典形式）作为一个元素记录下来
-                                    #所以这里的chr_data还是一个字典
-        chr_data.sort(key=lambda x: x['position']) #lambda表达式匿名函数应用到列表的每个元素上，获取返回值作为排序依据
-                                #  这里的匿名函数相当于对于chr_data中的每个元素（是一个字典）应用该函数
+    # Generate a file for each chromosome
+    for chr_num in sorted(chr_groups.keys()): # The keys are chromosome indices; key - 1 corresponds to the zero-based index in the initial chromosome mapping
+        chr_data = chr_groups[chr_num]  # The chr_groups dictionary stores each record for each chromosome(dictionary form)as an element
+                                    # Therefore chr_data is still a dictionary here
+        chr_data.sort(key=lambda x: x['position']) # The lambda anonymous function is applied to each list element and its return value is used as the sort key
+                                # This anonymous function is equivalent to applying the function to each dictionary element in chr_data
                                                 #   def get_position(x):
-                                            #     return x['position'] 返回值是位点号，所以就是根据位点号排序
+                                            # return x['position'] returns the position, so records are sorted by position
 
-        # 生成文件名（这里output是甲基化类型目录）
+        # Generate file name(output is the methylation-type directory here)
         dmp_file = os.path.join(output_dir, f"DMP_wt_{dir2_name}_mut_{dir1_name}_Chr{chr_num}.txt")
         ndmp_file = os.path.join(output_dir, f"N-DMP_wt_{dir2_name}_mut_{dir1_name}_Chr{chr_num}.txt")
         hyper_file = os.path.join(output_dir, f"hyper_DMP_wt_{dir2_name}_mut_{dir1_name}_Chr{chr_num}.txt")
         hypo_file = os.path.join(output_dir, f"hypo_DMP_wt_{dir2_name}_mut_{dir1_name}_Chr{chr_num}.txt")
 
-        # 分类数据
+        # Classify data
         dmp_data = []
         ndmp_data = []
         hyper_data = []
         hypo_data = []
 
-        # 遍历chr_data这个字典
-        for item in chr_data: # chr_data是一个字典，五个键值对的值为chr_num,mtype,position,qvalue,change
+        # Iterate over the chr_data dictionary
+        for item in chr_data: # chr_data is a dictionary, with five key-value fields:chr_num,mtype,position,qvalue,change
             position = item['position']
             qvalue = item['qvalue']
             change = item['change']
 
-            if qvalue <= fdr_threshold and item.get('meth_diff', 0.0) >= meth_diff_threshold: #判断是否显著，同时满足甲基化差异阈值
+            if qvalue <= fdr_threshold and item.get('meth_diff', 0.0) >= meth_diff_threshold: # Determine significance while also requiring the methylation-difference threshold
                 dmp_data.append((position, qvalue, change))
                 if change == 1:
                     hyper_data.append((position, qvalue, change))
@@ -5207,22 +5226,22 @@ def generate_dmp_files(dir1,dir2,output_dir, replicate_x, replicate_y, fdr_thres
             if chr_num in all_dfs_ndmp_dict[mtype1]:
                 ndmp_df = all_dfs_ndmp_dict[mtype1][chr_num]
                 if isinstance(ndmp_df, pd.DataFrame) and not ndmp_df.empty:
-                    # 获取已存在的位点集合，避免重复添加
+                    # Get the set of existing sites to avoid duplicate additions
                     existing_positions = set(item[0] for item in ndmp_data)
                     added_count = 0
                     for _, row in ndmp_df.iterrows():
                         pos = int(row['Position'])
                         pval = float(row['Pvalue'])
                         chg = int(row['Methylation_Change'])
-                        # 只添加不重复的位点
+                        # Add only non-duplicate sites
                         if pos not in existing_positions:
                             ndmp_data.append((pos, pval, chg))
                             added_count += 1
                     if added_count > 0:
-                        print(f"      为 Chr{chr_num} 添加了 {added_count} 个pvalue>0.05的NDMP位点")
+                        print(f"      for Chr{chr_num} added {added_count}  pvalue > 0.05 NDMP sites")
 
 
-        # 写入文件
+        # Write file
         def write_dmp_file(filename, data):
             with open(filename, 'w') as f:
                 f.write("first line\n")
@@ -5234,34 +5253,34 @@ def generate_dmp_files(dir1,dir2,output_dir, replicate_x, replicate_y, fdr_thres
         write_dmp_file(hyper_file, hyper_data)
         write_dmp_file(hypo_file, hypo_data)
 
-        # print(f"    跳过 Chr{chr_num} 的单 pair DMR 候选区域识别（已移除分支 DMR 输出；final DMR 将基于 common DMP 重新计算）")
+        # print(f" Skip Chr{chr_num} single-pair DMR candidate detection; branch DMR output has been removed and final DMR will be recalculated from common DMPs")
 
         print(f"    Chr{chr_num}: DMP={len(dmp_data)}, N-DMP={len(ndmp_data)}, Hyper={len(hyper_data)}, Hypo={len(hypo_data)}")
 
         # generate_dmp_files(output_dir, replicate_x, replicate_y, fdr_threshold=0.05, mtype1="CpG",
         #                    all_dfs_ndmp_dict=None, unfilter_mtypes=["CpG"]):
-        # 统计
+        # Count
         total_dmp += len(dmp_data)
         total_ndmp += len(ndmp_data)
         total_hyper += len(hyper_data)
         total_hypo += len(hypo_data)
 
-    print(f"    DMP文件生成完成！")
-    print(f"    总计: DMP={total_dmp}, N-DMP={total_ndmp}, Hyper={total_hyper}, Hypo={total_hypo}")
+    print(f"    DMP file generation completed.")
+    print(f"    Total: DMP={total_dmp}, N-DMP={total_ndmp}, Hyper={total_hyper}, Hypo={total_hypo}")
 
     bothfile1 = os.path.join(dir1,f"{replicate_x}-bothMeUnme_diffChromo_NOREPEATED_methy_sites_{mtype1}.txt")
 
     bothfile2 = os.path.join(dir2,f"{replicate_y}-bothMeUnme_diffChromo_NOREPEATED_methy_sites_{mtype1}.txt")
 
-    # print(f"    跳过 {mtype1} 的单 pair DMR reads 汇总/Fisher/FDR（已移除分支 DMR 输出；final DMR 将在 and_output/dmr_analysis_* 中重新计算）")
+    # print(f" Skip {mtype1} single-pair DMR read summarization/Fisher/FDR; branch DMR output has been removed and final DMR will be recalculated in and_output/dmr_analysis_*")
 
     if skip_window:
-        print(f"    跳过 {mtype1} 的单次 DMP/N-DMP 滑动窗口分析 (--skip-window)")
+        print(f"    skipping {mtype1} single-run  DMP/N-DMP sliding-window analysis (--skip-window)")
     else:
-        # 根据甲基化类型决定使用哪个滑动窗口函数
+        # Choose the sliding-window function according to methylation type
         if mtype1 not in unfilter_mtypes:
-            print(f"使用新版本的滑动窗口分析")
-            # 这里本来也要区分甲基化类型
+            print(f"Using the new sliding-window analysis implementation")
+            # Methylation type also needs to be distinguished here
             perform_sliding_window_on_dmp_files_after_filter(
                 output_dir, replicate_x, replicate_y,
                 all_dfs_ndmp_dict=all_dfs_ndmp_dict,
@@ -5271,7 +5290,7 @@ def generate_dmp_files(dir1,dir2,output_dir, replicate_x, replicate_y, fdr_thres
             #     output_dir, replicate_x, replicate_y
             # )
         else:
-            print(f"    使用标准版本的滑动窗口分析")
+            print(f"    Using the standard sliding-window analysis implementation")
             perform_sliding_window_on_dmp_files(output_dir, replicate_x, replicate_y)
     return True
 
@@ -5313,8 +5332,8 @@ def regenerate_pair_dmp_outputs_from_fdr(
     mut_group_name = mut_dir.name
 
     print(
-        "\n重新生成 pairwise DMP 输出："
-        f"q通过 且 abs(MethDiff)>={meth_diff_threshold:.6g}"
+        "\nRebuilding Generating pairwise DMP output:"
+        f"q passes and abs(MethDiff)>={meth_diff_threshold:.6g}"
     )
 
     for mut_idx in range(1, int(m) + 1):
@@ -5340,7 +5359,7 @@ def regenerate_pair_dmp_outputs_from_fdr(
                     f"wt_replicate{wt_idx}_vs_mut_replicate{mut_idx}.txt"
                 )
                 if not fdr_file.exists():
-                    print(f"  ⚠ 跳过，FDR文件不存在：{fdr_file}")
+                    print(f"  [WARN] skipping; FDR file does not exist: {fdr_file}")
                     continue
 
                 fdr = pd.read_csv(fdr_file, sep="\t")
@@ -5351,7 +5370,7 @@ def regenerate_pair_dmp_outputs_from_fdr(
                 missing = required - set(fdr.columns)
                 if missing:
                     raise ValueError(
-                        f"{fdr_file} 缺少必要列：{sorted(missing)}"
+                        f"{fdr_file} is missing required columns:{sorted(missing)}"
                     )
 
                 frame = pd.DataFrame({
@@ -5417,8 +5436,8 @@ def regenerate_pair_dmp_outputs_from_fdr(
                         ["chr", "position"],
                     ].head().to_dict("records")
                     raise RuntimeError(
-                        f"{fdr_file}: {missing_raw} 个FDR位点在原始WT/MUT中"
-                        f"无法匹配，示例={examples}"
+                        f"{fdr_file}: {missing_raw} FDR sites in the original WT/MUT inputs "
+                        f"could not be matched,examples={examples}"
                     )
 
                 merged["signed_methdiff_raw"] = (
@@ -5508,7 +5527,7 @@ def regenerate_pair_dmp_outputs_from_fdr(
                     "status": "ok",
                 })
                 print(
-                    f"  ✓ wt{wt_idx}-mut{mut_idx} {ctx}: "
+                    f"  [OK] wt{wt_idx}-mut{mut_idx} {ctx}: "
                     f"DMP={total_dmp}, N-DMP={total_ndmp}"
                 )
 
@@ -5517,20 +5536,22 @@ def regenerate_pair_dmp_outputs_from_fdr(
     summary_dir.mkdir(parents=True, exist_ok=True)
     summary_file = summary_dir / "pair_dmp_regeneration_summary.tsv"
     summary.to_csv(summary_file, sep="\t", index=False)
-    print(f"pairwise DMP重建汇总表保存至: {summary_file}")
+    print(f"pairwise DMPrebuild summary tablesaved to: {summary_file}")
     return summary
 
-# 将此函数集成到 process_replicate_pair 中
+# Integrate this function into process_replicate_pair
 def process_replicate_pair(replicate_x, replicate_y, files1, files2, dir1, dir2, dir1_name, dir2_name, unfilter_mtypes, work_dir=".", meth_diff_threshold=0.0, skip_dmr=False, skip_window=False):
-    """处理一对组的所有甲基化类型，是处理1*3次检验
-    replicate_x,replicate_y为both文件的序号
-    files为一个字典链路：序号->甲基化类型->对应文件名
-    dir1,dir2为两个基因型数据的目录名
-    dir1_name，dir2_name是所给两个dir1,dir2路径的最后一个部分"""
+    """
+    Process all methylation types for one replicate pair, corresponding to 1*3 tests.
+    replicate_x and replicate_y are the indices of both-format files.
+    files is a mapping chain: replicate index -> methylation type -> corresponding file name.
+    dir1 and dir2 are the two genotype data directories.
+    dir1_name and dir2_name are the final path components of the given dir1 and dir2 paths.
+    """
 
-    print(f"\n  处理组对 (wt{replicate_y}, mut{replicate_x})...")
+    print(f"\n  Processing pair (wt{replicate_y}, mut{replicate_x})...")
 
-    # 创建该组输出目录
+    # Create the output directory for this comparison
     output_dir = os.path.join(work_dir, f"output_wt{replicate_y}_mut{replicate_x}")
     os.makedirs(output_dir, exist_ok=True)
 
@@ -5541,70 +5562,70 @@ def process_replicate_pair(replicate_x, replicate_y, files1, files2, dir1, dir2,
     pair_success_count = 0
     pair_total_tests = 0
 
-    # 循环处理每种甲基化类型
+    # Loop over each methylation type
     for methylation_type in methylation_types:
         if methylation_type not in all_dfs_ndmp_dict:
             all_dfs_ndmp_dict[methylation_type] = {}
 
         success_count = total_tests = 0
-        # 这里 in files1[replicate_x] 是判断methylation_type是否在files1[replicate_x] 这个字典的键中存在，存在的话就说明
-        # 对应的 i-both...methylation_type.txt文件存在
+        # Here "in files1[replicate_x]" checks whether methylation_type exists as a key in files1[replicate_x]; if it exists,
+        # the corresponding i-both...methylation_type.txt file exists
         if (methylation_type not in files1[replicate_x] or
                 methylation_type not in files2[replicate_y]):
-            print(f"    跳过甲基化类型 {methylation_type}：因为文件不存在")
+            print(f"    skipping methylation context {methylation_type}: file does not exist")
             continue
-        # 否则获取到当前需要处理的文件的相对路径
+        # Otherwise, get the relative paths of the files to be processed
         file1_path = os.path.join(dir1, files1[replicate_x][methylation_type])
         file2_path = os.path.join(dir2, files2[replicate_y][methylation_type])
 
-        # 获取两个文件中的染色体数量
+        # Get the chromosome counts from the two files
         n_chromosomes_1 = get_column_count(file1_path)
         n_chromosomes_2 = get_column_count(file2_path)
 
         if n_chromosomes_1 is None or n_chromosomes_2 is None:
-            print(f"    无法获取 {methylation_type} 的染色体数量")
+            print(f"    unable to get {methylation_type}  chromosome count")
             continue
 
         if n_chromosomes_1 != n_chromosomes_2:
-            print(f"    {methylation_type} 染色体数量不一致：{n_chromosomes_1} vs {n_chromosomes_2}")
+            print(f"    {methylation_type} chromosome counts are inconsistent:{n_chromosomes_1} vs {n_chromosomes_2}")
             continue
 
-        # 到这里就说明要处理的两个both文件中都有染色体数据且总列数相同
-        # 不过其实可以不用判断的，因为一开始newtoboth已经保证列数肯定相同
-        n_chromosomes = n_chromosomes_1  # 获取总染色体数
-        print(f"    处理甲基化类型 {methylation_type}，共 {n_chromosomes} 条染色体")
+        # At this point, both both-files contain chromosome data and have the same total column count
+        # This check is not strictly necessary because newtoboth already guarantees matching column counts
+        n_chromosomes = n_chromosomes_1  # Get the total chromosome count
+        print(f"    Processing methylation context {methylation_type},with {n_chromosomes}  chromosomes")
 
-        # 处理当前x_y组的当前甲基化类型的文件的每条染色体，这里的chr_num是第几个染色体，而不是染色体号
+        # Process each chromosome for the current x_y pair and methylation type; chr_num is the ordinal chromosome index, not the chromosome label
         for chr_num in range(1, n_chromosomes + 1):
             if methylation_type in unfilter_mtypes:
                 success = process_methylation_type_with_collection(
                     file1_path, file2_path, methylation_type, output_dir,
                     dir1_name, dir2_name, chr_num, meth_diff_threshold=meth_diff_threshold
-                )  # 处理1次检验的一个染色体
+                )  # Process one chromosome for one test
             else:
-                # 这里要区分甲基化类型
+                # Methylation type must be distinguished here
                 all_df_ndmp = process_methylation_type_with_collection_pvfilter(
                     file1_path, file2_path, methylation_type, output_dir,
                     dir1_name, dir2_name, chr_num, meth_diff_threshold=meth_diff_threshold
-                )   #返回此次的一个pvalue>0.05的df
+                )   # Return a DataFrame of pvalue > 0.05 records for this test
                     #  all_results([pos, pvalue, change])
                 if chr_num not in all_dfs_ndmp_dict[methylation_type]:
                     all_dfs_ndmp_dict[methylation_type][chr_num] = all_df_ndmp
                     if (isinstance(all_df_ndmp, pd.DataFrame)):
-                        print(f"成功添加{methylation_type}-{chr_num}-特定df到字典中，此次df中有{len(all_df_ndmp)}行数据")
+                        print(f"successfully added {methylation_type}-{chr_num} specific DataFrame to the dictionary; this DataFrame has {len(all_df_ndmp)} rows")
                 success = isinstance(all_df_ndmp, pd.DataFrame)
             total_tests += 1
-            if success:  # 上一步处理正常进行就会返回True，否则返回False
+            if success:  # The previous step returns True if processing succeeded, otherwise False
                 success_count += 1
 
         pair_success_count += success_count
         pair_total_tests += total_tests
 
-        # 合并FET结果并进行FDR校正
-        #  其中 FET结果的格式如：pos, m1, u1, m2, u2, pvalue
+        # Merge FET results and perform FDR correction
+        # The FET result format is:pos, m1, u1, m2, u2, pvalue
         if success_count > 0:
             output_dir1 = os.path.join(output_dir, methylation_type)
-            # 获取一个output_x_y/甲基化类型/目录下的所有FET文件，将其concat起来，然后FDR检验为qvalues,并导出到磁盘，最终格式为：
+            # Get all FET files under one output_x_y/methylation_type directory, concatenate them, calculate FDR q-values, and export to disk; final format:
             #                                        Chromosome, Methylation_Type, Position, Pvalue, Qvalue
             merge_ok, dmp_threshold = merge_fet_results_and_fdr(
                 output_dir1, replicate_x, replicate_y, methylation_type,
@@ -5612,40 +5633,40 @@ def process_replicate_pair(replicate_x, replicate_y, files1, files2, dir1, dir2,
                 is_twostep_context=(methylation_type not in unfilter_mtypes)
             )
             if not merge_ok:
-                print(f"    {methylation_type} 的FDR合并失败，跳过DMP文件生成")
+                print(f"    {methylation_type} ofFDRmerge failed; skippingDMPfile generation")
                 continue
-            # 生成DMP文件：固定阈值或两步法自动阈值由 merge_fet_results_and_fdr 返回
+            # Generate DMP files: fixed thresholds or two-step automatic thresholds are returned by merge_fet_results_and_fdr
             generate_dmp_files(dir1,dir2,output_dir1, replicate_x, replicate_y, fdr_threshold=dmp_threshold, mtype1=methylation_type,all_dfs_ndmp_dict=all_dfs_ndmp_dict
                                ,unfilter_mtypes=unfilter_mtypes,n_chromosomes=n_chromosomes, meth_diff_threshold=meth_diff_threshold,
                                skip_dmr=skip_dmr, skip_window=skip_window)
 
-    print(f"  组对 (wt{replicate_y}, mut{replicate_x}) 处理完成！成功 {pair_success_count}/{pair_total_tests} 次检验")
-    return pair_success_count, pair_total_tests    # 这里是一个染色体就算一次检验
+    print(f"  pair (wt{replicate_y}, mut{replicate_x}) processing completed: successfully {pair_success_count}/{pair_total_tests} tests")
+    return pair_success_count, pair_total_tests    # Here one chromosome is treated as one test
 
 
 def process_all_combinations(dir1, dir2, m, n, unfilter_mtypes, work_dir=".", meth_diff_threshold=0.0,
                              skip_dmr=False, skip_window=False, threads=1):
-    """处理所有组合，进行m*n*3次检验；支持 replicate-pair 级并行。"""
+    """Process all combinations and perform m*n*3 tests; replicate-pair-level parallelization is supported."""
 
-    print(f"扫描文件目录...")
+    print(f"Scanning file directories...")
     files1 = scan_sample_files_by_replicates(dir1, m)
     files2 = scan_sample_files_by_replicates(dir2, n)
 
-    print(f"目录1 ({dir1}) 找到 {len(files1)} 组文件")
-    print(f"目录2 ({dir2}) 找到 {len(files2)} 组文件")
+    print(f"directory1 ({dir1}) Found {len(files1)} replicate files")
+    print(f"directory2 ({dir2}) Found {len(files2)} replicate files")
 
     missing_replicates1 = [i for i in range(1, m + 1) if i not in files1]
     missing_replicates2 = [i for i in range(1, n + 1) if i not in files2]
     if missing_replicates1:
-        print(f"警告：目录1缺少这些组: {missing_replicates1}")
+        print(f"WARNING: directory1is missing these replicates: {missing_replicates1}")
     if missing_replicates2:
-        print(f"警告：目录2缺少这些组: {missing_replicates2}")
+        print(f"WARNING: directory2is missing these replicates: {missing_replicates2}")
 
     available_replicates1 = [i for i in range(1, m + 1) if i in files1]
     available_replicates2 = [i for i in range(1, n + 1) if i in files2]
 
     total_combinations = len(available_replicates1) * len(available_replicates2)
-    print(f"\n开始处理 {total_combinations} 个组合...")
+    print(f"\nStarting {total_combinations}  combinations...")
 
     dir1_name = sanitize_filename(os.path.basename(dir1.rstrip(os.sep)))
     dir2_name = sanitize_filename(os.path.basename(dir2.rstrip(os.sep)))
@@ -5677,7 +5698,7 @@ def process_all_combinations(dir1, dir2, m, n, unfilter_mtypes, work_dir=".", me
 
     if threads <= 1 or len(tasks) <= 1:
         for i, task in enumerate(tasks, 1):
-            print(f"\n进度: {i}/{total_combinations}")
+            print(f"\nprogress: {i}/{total_combinations}")
             success_count, test_count = process_replicate_pair(
                 task["replicate_x"], task["replicate_y"], files1, files2,
                 dir1, dir2, dir1_name, dir2_name, unfilter_mtypes,
@@ -5698,7 +5719,7 @@ def process_all_combinations(dir1, dir2, m, n, unfilter_mtypes, work_dir=".", me
                 f"pair_wt{task['replicate_y']}_mut{task['replicate_x']}.log"
             )
 
-        print(f"启用并行 replicate-pair 处理: workers={max_workers}, tasks={len(tasks)}")
+        print(f"Enabled parallel replicate-pair Processing: workers={max_workers}, tasks={len(tasks)}")
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             future_to_task = {executor.submit(_run_replicate_pair_worker, task): task for task in tasks}
             for i, future in enumerate(as_completed(future_to_task), 1):
@@ -5709,8 +5730,8 @@ def process_all_combinations(dir1, dir2, m, n, unfilter_mtypes, work_dir=".", me
                     total_success += res["success_count"]
                     total_tests += res["test_count"]
                     print(
-                        f"[DONE] {i}/{len(tasks)} {label}: 成功 "
-                        f"{res['success_count']}/{res['test_count']} 次检验, "
+                        f"[DONE] {i}/{len(tasks)} {label}: successfully "
+                        f"{res['success_count']}/{res['test_count']} tests, "
                         f"{res['elapsed']:.2f}s, log={res['log_file']}"
                     )
                 except Exception as e:
@@ -5718,12 +5739,12 @@ def process_all_combinations(dir1, dir2, m, n, unfilter_mtypes, work_dir=".", me
                     raise
 
     end_time = time.time()
-    print(f"\n所有处理完成！")
-    print(f"总计: {total_success}/{total_tests} 次成功检验")
-    print(f"用时: {end_time - start_time:.2f} 秒")
-    print(f"单次比较结果保存在 ./output_x_y/甲基化类型/ 目录中")
+    print(f"\nAll processing completed!")
+    print(f"Total: {total_success}/{total_tests} successful tests")
+    print(f"Elapsed time: {end_time - start_time:.2f} seconds")
+    print(f"Single-comparison results are saved in ./output_x_y/<methylation_context>/ directories")
 
-    # 兼容原代码行为：若没有可计数测试但输出流程未抛异常，不判定为失败。
+    # Backward compatibility: if no countable tests exist but output did not raise an exception, do not mark it as failed.
     return total_success == total_tests
 
 def _dmp_required_count(total_count, auto_vote_threshold=None):
@@ -5813,8 +5834,8 @@ def apply_dmp_lowdiff_strict_vote_to_result_df(
         f"low_required={low_required}, total_groups={total_groups}"
     )
     print(
-        "  规则：provisional final DMP 中，若 boundary_abs_methdiff <= cutoff "
-        "且 support_count < low_required，则从最终DMP中移除。"
+        "  Rule:provisional final DMP in,if boundary_abs_methdiff <= cutoff "
+        "and support_count < low_required, then remove the site from the final DMP set."
     )
 
     records = []
@@ -5905,18 +5926,19 @@ def apply_dmp_lowdiff_strict_vote_to_result_df(
     print(f"  lowdiff candidates: {n_lowdiff}")
     print(f"  removed by lowdiff strict vote: {n_removed}")
     print(f"  final after lowdiff strict vote: {len(filtered_df)}")
-    print(f"  lowdiff诊断表保存至: {diag_file}")
-    print(f"  provisional DMP备份保存至: {provisional_file}")
-    print(f"  lowdiff汇总表保存至: {summary_file}")
+    print(f"  lowdiffdiagnostic tablesaved to: {diag_file}")
+    print(f"  provisional DMPbackupsaved to: {provisional_file}")
+    print(f"  lowdiffsummary tablesaved to: {summary_file}")
 
     return filtered_df
 
 
 def bayes_deciding(sig_count, nonsig_count, auto_vote_threshold=None):
-    """根据跨replicate组合中的显著支持次数进行最终DMP/DMR投票判定。
+    """
+    Make the final DMP/DMR voting decision from the number of significant supporting replicate combinations.
 
-    若 auto_vote_threshold 为整数，则直接使用该 required_count；
-    否则沿用 --vote-threshold 对应的 round-half-up required_count。
+    If auto_vote_threshold is an integer, use that required_count directly;
+    otherwise use the round-half-up required_count implied by --vote-threshold.
     """
     total_count = sig_count + nonsig_count
     if total_count <= 0:
@@ -5927,55 +5949,56 @@ def bayes_deciding(sig_count, nonsig_count, auto_vote_threshold=None):
     else:
         required_count = int(np.floor(VOTE_THRESHOLD * total_count + 0.5))
     final_decision = 1 if sig_count >= required_count else 0
-    # print(f"\n判定（投票阈值={VOTE_THRESHOLD * 100:.1f}%）")
-    # print(f"  判定结果：{'显著' if final_decision else '不显著'}")
-    # print(f"  支持比例：{support_ratio * 100:.1f}%")
+    # print(f"\nDecision(voting threshold={VOTE_THRESHOLD * 100:.1f}%)")
+    # print(f" Decisionresult:{'significant' if final_decision else 'not significant'}")
+    # print(f" support ratio:{support_ratio * 100:.1f}%")
 
     return final_decision
 
 def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None, dir2=None, work_dir=".", meth_diff_threshold=0.0):
     """
-    找出在所有组合检验中都显著的位点，并获取对应位点的相关信息
-    参数：
-        output_dirs: 输出目录列表，如果为None则自动扫描
-        methytype2: 甲基化类型
+    Find sites that are significant across the combination tests and collect related information.
+
+    Parameters:
+        output_dirs: list of output directories; if None, directories are scanned automatically.
+        methytype2: methylation context.
     """
 
-    print("\n寻找所有组合中共同显著的位点...")
+    print("\nSearching for common significant sites across all combinations...")
 
     and_output_dir = os.path.join(work_dir, "and_output")
     os.makedirs(and_output_dir, exist_ok=True)
 
-    # 1. 自动扫描所有output_x_y目录
+    # 1. Automatically scan all output_x_y directories
     if output_dirs is None:
         output_dirs = glob.glob(os.path.join(work_dir,f"output_*_*/{methytype2}"))
-        # 找出所有output_x_y/methytype2/这种格式的目录，一共m*n个
+        # Find all directories of the form output_x_y/methytype2, for a total of m*n
         output_dirs = [d for d in output_dirs if os.path.isdir(d)]
 
-    if not output_dirs: # 没找到的话
-        print("未找到任何输出目录")
+    if not output_dirs: # If none are found
+        print("No output directories were found")
         return None
 
-    print(f"找到 {len(output_dirs)} 个输出目录")
+    print(f"Found {len(output_dirs)} output directories")
 
     auto_vote_threshold = AUTO_DMP_VOTE_THRESHOLDS.get(methytype2)
     if AUTO_VOTE_THRESHOLD_REPORT_ONLY:
         auto_vote_threshold = None
     if auto_vote_threshold is not None:
-        print(f"使用 {methytype2} DMP自动投票阈值: {auto_vote_threshold}")
+        print(f"Using {methytype2} DMP auto vote thresholds: {auto_vote_threshold}")
     else:
-        print(f"{methytype2} DMP自动投票阈值不可用或仅报告，使用比例阈值 {VOTE_THRESHOLD}")
+        print(f"{methytype2} DMPauto vote threshold is unavailable or report-only,using proportional threshold {VOTE_THRESHOLD}")
 
-    # 2. 一次性读取所有FDR_correct文件到内存，读取所有FDR_corrected文件（包含所有位点）,因为如果只读取显著位点信息的话，
-            # 假设某个位点在1_1 sig文件中有出现，但在后面一次检验中没出现，就不知道是因为不显著没出现还是这次输入的原始数据里就没有该位点
-    valid_dirs = [] # 收集在后续操作中起到作用的目录的路径
-    site_statistics = {}  # 建立如此映射：{site_id: {'sig': 0, 'total': 0}}
-    all_dataframes = {} # 最终可以通过all_dataframes[目录]->FDR_correct对应的df
-    dir_to_replicate = {} #记录目录对应的replicate编号
-    for output_dir in output_dirs: # 遍历所有output_x_y/methytype2/
-        # 获取到当前甲基化目录下的FDR_correct文件，
-            # 格式为：'Chromosome', 'Methylation_Type', 'Position', 'Pvalue', 'Qvalue'
-        # 其中qvalue不同于之前都是小于阈值的，而是所有的
+    # 2. Read all FDR_corrected files into memory at once, including all sites; if only significant-site files were read,,
+            # when a site appears in the 1_1 significant file but not in a later test, it would be unclear whether it was nonsignificant or absent from the raw input for that test
+    valid_dirs = [] # Collect paths to directories used in later operations
+    site_statistics = {}  # Build this mapping:{site_id: {'sig': 0, 'total': 0}}
+    all_dataframes = {} # Finally, the corresponding FDR_corrected DataFrame can be accessed as all_dataframes[directory]
+    dir_to_replicate = {} # Record replicate IDs corresponding to each directory
+    for output_dir in output_dirs: # Iterate over all output_x_y/methytype2 directories
+        # Get the FDR_corrected file under the current methylation directory,
+            # Format::'Chromosome', 'Methylation_Type', 'Position', 'Pvalue', 'Qvalue'
+        # Here qvalue includes all sites rather than only values below the threshold
         match = re.search(r'output_wt(\d+)_mut(\d+)', output_dir)
         if not match:
             continue
@@ -5986,31 +6009,31 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
 
         fdr_all_files = glob.glob(os.path.join(output_dir, "FDR_corrected_results_*.txt"))
 
-        # 检验存在性
+        # Check existence
         if not fdr_all_files:
-            print(f"  警告：{output_dir} 中未找到FDR_corrected文件")
+            print(f"  WARNING: {output_dir} not found inFDR_correctedfile")
             continue
 
-        fdr_all_file = fdr_all_files[0] # 这是因为glob.glob的返回值是一个列表，所以用[0]获取到实际存在的文件路径
+        fdr_all_file = fdr_all_files[0] # Because glob.glob returns a list, use [0] to get the actual existing file path
 
         try:
-            df = pd.read_csv(fdr_all_file, sep=r'\s+') # 读取该文件到df中FDR_corrected格式为：
+            df = pd.read_csv(fdr_all_file, sep=r'\s+') # Read this file into df; FDR_corrected format is:
                                         # 'Chromosome', 'Methylation_Type', 'Position', 'Pvalue', 'Qvalue'
             if len(df) > 0:
-                # 为每一行创建唯一标识符
-                #  具体为：对df中的每一行，将其中的染色体号-甲基化类型-位点号提取出来，放在右侧作为新的一列site_id
-                #     这是因为后面需要统计所有位点在多次检验中的显著与否，通过site_id就能仅用一个属性区分不同的位点了，不必去
-                #   连续判断多个属性是否相等来筛选或访问（染色体号、甲基化类型、位点号） （注意这里的染色体号是both文件中的第几个三列）
+                # Create a unique identifier for each row
+                # Specifically, for each row in df, extract chromosome, methylation type, and position and add them as a new site_id column
+                # This is needed to count whether each site is significant across tests; site_id distinguishes sites with one attribute, avoiding repeated
+                # checks of multiple attributes for filtering or access (chromosome, methylation type, position); note that chromosome number here is the three-column block index in the both file
                 df['site_id'] = df.apply(
                     lambda row: f"{int(row['Chromosome'])}-{row['Methylation_Type']}-{int(row['Position'])}",
                     axis=1
                 )
-                all_dataframes[output_dir] = df # all_dataframes[目录]->FDR_correct对应的df
+                all_dataframes[output_dir] = df # all_dataframes[directory]->FDR_correctcorresponding df
                 valid_dirs.append(output_dir)
-                dir_to_replicate[output_dir] = (replicate_x, replicate_y)  # 记录编号
-                # 获取当前甲基化类型的默认DMP阈值；若FDR文件含有每次比较实际使用的阈值，则优先使用该列
+                dir_to_replicate[output_dir] = (replicate_x, replicate_y)  # Record IDs
+                # Get the default DMP threshold for the current methylation type; if the FDR file has the actual threshold used for each comparison, prefer that column
                 dmp_threshold = get_dmp_threshold(methytype2)
-                for _, row in df.iterrows(): # 遍历每一行，每一行是一次检验中FDR_correct中所有不管显著还是不显著的位点信息
+                for _, row in df.iterrows(): # Iterate over each row; each row is one site from FDR_corrected for one test, regardless of significance
                     site_id = row['site_id']
 
                     if site_id not in site_statistics:
@@ -6053,52 +6076,52 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
                         site_statistics[site_id]['support_qvalues'].append(qvalue_for_support)
 
 
-                print(f"  {output_dir}: {len(df)} 个位点")
+                print(f"  {output_dir}: {len(df)}  sites")
             else:
-                print(f"  {output_dir}: 无显著位点")
+                print(f"  {output_dir}: no significant sites")
         except Exception as e:
-            print(f"  错误：读取 {fdr_all_file} 失败: {e}")
+            print(f"  ERROR:read {fdr_all_file} failed: {e}")
             continue
     valid_dirs.sort(key=lambda d: dir_to_replicate[d])
-    print(f"\n统计完成，共 {len(site_statistics)} 个不同位点")
+    print(f"\nstatistics completed,with {len(site_statistics)} distinct sites")
 
     if not site_statistics:
-        print("没有找到任何有效的位点信息结果")
+        print("no valid site-information results were found")
         return None
 
-    # 3. 获取到贝叶斯方法判定为显著的位点，放到common_sites里
+    # 3. Get sites called significant by the voting/Bayesian rule and put them into common_sites
     common_sites = []
     for site_id, stats in site_statistics.items():
         if stats['total_count'] != len(valid_dirs):
             stats['total_count'] = len(valid_dirs)
-        sig_count = stats['sig_count']  # 获取到当前位点显著检验次数
-        nonsig_count = stats['total_count'] - sig_count  # 获取到当前位点非显著检验次数
+        sig_count = stats['sig_count']  # Get the significant-test count for the current site
+        nonsig_count = stats['total_count'] - sig_count  # Get the nonsignificant-test count for the current site
         is_significant = bayes_deciding(sig_count, nonsig_count, auto_vote_threshold=auto_vote_threshold)
         if is_significant:
             common_sites.append(site_id)
     if not common_sites:
-        print("没有在所有组合中都显著的位点")
+        print("no sites were significant in all combinations")
         return None
     else:
-        print(f"\n贝叶斯判定后，共 {len(common_sites)} 个显著位点")
+        print(f"\nafter Bayesian decision,with {len(common_sites)}  significant sitessites")
 
-    # 4. 读取每个目录的甲基化变化方向信息
-    print("正在读取甲基化变化方向信息...")
+    # 4. Read methylation-change direction information from each directory
+    print("reading methylation-change direction information...")
     methylation_change_by_dir = {}  # {output_dir: {site_id: change}}
 
-    for output_dir in valid_dirs: # 遍历上述有效的该甲基化类型的目录
-        methylation_change_by_dir[output_dir] = {} # 创建当前目录的字典元素，
-                                        # 构建 output_dir->site_id->change的链路
-        # 查找该目录下所有的all_simple_Chr文件，因为这个文件中有change信息，其格式为pos, pvalue, change，
-                                                # 而染色体号从文件名获取
+    for output_dir in valid_dirs: # Iterate over valid directories for this methylation type
+        methylation_change_by_dir[output_dir] = {} # Create the dictionary entry for the current directory,
+                                        # Build the output_dir -> site_id -> change mapping
+        # Find all all_simple_Chr files in this directory because they contain change information in the format pos, pvalue, change,
+                                                # and chromosome number is obtained from the file name
         all_simple_files = glob.glob(os.path.join(output_dir, "all_simple_Chr*.txt"))
-                                                        # 获取当前目录下所有的all_simple文件的路径并组成列表
+                                                        # Get all all_simple file paths under the current directory as a list
 
-        for file_path in all_simple_files: # 遍历all_simple文件，格式为pos, pvalue, change
-            chr_match = re.search(r'Chr(\d+)\.txt$', file_path) #创建正则表达式及捕获组，用于获取染色体号
+        for file_path in all_simple_files: # Iterate over all_simple files; format is pos, pvalue, change
+            chr_match = re.search(r'Chr(\d+)\.txt$', file_path) # Create the regex and capturing group used to get chromosome number
             if not chr_match:
                 continue
-            chr_num = int(chr_match.group(1)) # 通过捕获组获取到当前文件的染色体号
+            chr_num = int(chr_match.group(1)) # Get the chromosome number of the current file from the capturing group
 
             try:
                 df = pd.read_csv(
@@ -6106,11 +6129,11 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
                     sep='\t',
                     usecols=[0, 2],
                     names=['position', 'change'],
-                    dtype={'position': float, 'change': float}, # float啥字符串都可以转换，不会发生错误，是比较稳妥的方案
+                    dtype={'position': float, 'change': float}, # Converting via float can handle more string formats robustly
                     skiprows=1
                 )
 
-                # 此时将pos和change都转换为int类型就不会出问题，否则str转int有可能出问题，比如"100.0"转int就会报错
+                # Convert both pos and change to int at this point to avoid errors such as int("100.0")
                 df['position'] = df['position'].astype(int)
                 df['change'] = df['change'].astype(int)
 
@@ -6122,25 +6145,25 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
                     methylation_change_by_dir[output_dir][site_id] = change
 
             except Exception as e:
-                print(f"  警告：读取 {file_path} 失败: {e}")
+                print(f"  WARNING: read {file_path} failed: {e}")
                 continue
 
-        print(f"  {output_dir}: 读取了 {len(methylation_change_by_dir[output_dir])} 个位点的变化方向")
+        print(f"  {output_dir}: read {len(methylation_change_by_dir[output_dir])}  siteschange-direction records")
 
-    # 5. 处理共同位点信息
-    print("正在处理共同位点详细信息...")
+    # 5. Process common-site information
+    print("processing detailed common-site information...")
     common_site_details = []
 
-    # 为每个DataFrame创建索引以加快查询
-    indexed_dfs = {} # 建立output_dir->df1（site_id变作索引后）的链路
+    # Create an index for each DataFrame to speed up lookup
+    indexed_dfs = {} # Build the output_dir -> df1 mapping after site_id is set as the index
     for output_dir in valid_dirs:
-        df = all_dataframes[output_dir] # 获取每个目录中的FDR_correct对应的df（已经加上了site_id这列）
-        indexed_dfs[output_dir] = df.set_index('site_id') # 将site_id设置为索引，并将新的df1返回作为字典的值
+        df = all_dataframes[output_dir] # Get the FDR_corrected DataFrame from each directory, already with the site_id column added
+        indexed_dfs[output_dir] = df.set_index('site_id') # Set site_id as the index and return the new df1 as the dictionary value
 
-    # 逐一处理common位点
+    # Process common sites one by one
     for i, site_id in enumerate(common_sites):
-        if i % 10000 == 0:  # 每处理10000个位点打印进度
-            print(f"  已处理 {i}/{len(common_sites)} 个位点")
+        if i % 10000 == 0:  # Print progress every 10000 sites
+            print(f"  Processed {i}/{len(common_sites)}  sites")
 
         site_info = {'site_id': site_id}
         chr_num, mtype, pos = site_id.split('-')
@@ -6148,17 +6171,17 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
         site_info['Methylation_Type'] = mtype
         site_info['Position'] = int(pos)
 
-        # 收集q值的列表，收集不同output_x_y/methytype2/目录下相同染色体相同位点号(符合当前site_id信息的那个位点)在所有检验中的q值
+        # Collect q-values for the same chromosome and position across output_x_y/methytype2 directories for the current site_id
         qvalues = []
         sig_qvalues_for_mean = []
-        # 收集不同output_x_y/methytype2/目录下相同染色体相同位点号(符合当前site_id信息的那个位点)在所有检验中的变化方向
+        # Collect change directions for the same chromosome and position across output_x_y/methytype2 directories for the current site_id
         change_values = []
         qvalue_dict = {}
         for output_dir in valid_dirs:
             replicate_x, replicate_y = dir_to_replicate[output_dir]
-            col_name = f'qvalue_{os.path.basename(dir2.rstrip("/"))}{replicate_y}_{os.path.basename(dir1.rstrip("/"))}{replicate_x}'   # 新增：列名，前面是野生型的序号，后面是突变型的序号
-            indexed_df = indexed_dfs[output_dir] # output_dir->df1（site_id变作索引后）,获取到索引为site_id的当前甲基化的某个FDR_correct文件
-                                # 内容格式为：'Chromosome', 'Methylation_Type', 'Position', 'Pvalue', 'Qvalue'
+            col_name = f'qvalue_{os.path.basename(dir2.rstrip("/"))}{replicate_y}_{os.path.basename(dir1.rstrip("/"))}{replicate_x}'   # New column name: control/wild-type index first, mutant index second
+            indexed_df = indexed_dfs[output_dir] # output_dir->df1(after site_id is used as the index),get the current methylation FDR_corrected file indexed by site_id
+                                # Content format::'Chromosome', 'Methylation_Type', 'Position', 'Pvalue', 'Qvalue'
             if site_id in indexed_df.index:
                 row_for_site = indexed_df.loc[site_id]
                 if isinstance(row_for_site, pd.DataFrame):
@@ -6175,13 +6198,13 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
                 if float(qval) <= threshold_used:
                     sig_qvalues_for_mean.append(float(qval))
 
-                # 获取该位点在该目录中的change值，(output_dir->site_id->change的链路)
+                # Get the change value of this site in this directory, (output_dir->site_id->changemapping)
                 if site_id in methylation_change_by_dir[output_dir]:
                     change_values.append(methylation_change_by_dir[output_dir][site_id])
             else:
                 qvalue_dict[col_name] = 1.0
 
-        if qvalues:  # 确保有q值数据
+        if qvalues:  # Ensure q-value data are available
             if len(sig_qvalues_for_mean) > 0:
                 site_info['Sig_Mean_Qvalue'] = np.mean(sig_qvalues_for_mean)
             else:
@@ -6190,40 +6213,40 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
             # site_info['Min_Qvalue'] = np.min(qvalues)
             site_info['Num_Comparisons'] = len(qvalues)
 
-            # 投票计算甲基化变化方向
+            # Use voting to calculate methylation-change direction
             if change_values:
-                # 统计change==1的次数
+                # Count change == 1
                 num_hyper = sum(change_values)
                 total_comparisons = len(change_values)
                 hyper_ratio = num_hyper / total_comparisons
 
-                # 多数投票：>= 50%则记为1（高甲基化），否则为0
+                # Majority voting: record 1 (hypermethylated) if >= 50%, otherwise 0
                 site_info['Methylation_Change'] = 1 if hyper_ratio >= 0.5 else 0
-                site_info['Hyper_Count'] = num_hyper  # 高甲基化次数
-                site_info['Hypo_Count'] = total_comparisons - num_hyper  # 低甲基化次数
-                site_info['Hyper_Ratio'] = hyper_ratio  # 高甲基化比例
+                site_info['Hyper_Count'] = num_hyper  # Hypermethylated count
+                site_info['Hypo_Count'] = total_comparisons - num_hyper  # Hypomethylated count
+                site_info['Hyper_Ratio'] = hyper_ratio  # Hypermethylated ratio
             else:
-                # 如果没有change信息，标记为缺失（不过按理来说一次检验是正好对应一个qvalue和一个change的）
-                site_info['Methylation_Change'] = -1  # -1表示无法确定
+                # If no change information is available, mark it as missing; in principle, each test should have exactly one q-value and one change value
+                site_info['Methylation_Change'] = -1  # -1 means undetermined
                 site_info['Hyper_Count'] = 0
                 site_info['Hypo_Count'] = 0
                 site_info['Hyper_Ratio'] = 0
 
-            site_info.update(qvalue_dict) # 添加所有replicate的qvalue列
+            site_info.update(qvalue_dict) # Add all replicate q-value columns
 
-            common_site_details.append(site_info) # 这个列表中记录了一个个字典，每个字典是一个site_id对应的各个信息，格式：
-        # site_id-染色体号-甲基化类型-位点号-总检验次数-change-hypercount-hypocount-hyperratio-Sig_Mean_Qvalue-所有qvalues
-            # （此处染色体号是both文件中的第几个3列）
+            common_site_details.append(site_info) # This list stores dictionaries; each dictionary contains information for one site_id with the following format:
+        # site_id-chromosome number-methylation type-position-total test count-change-hypercount-hypocount-hyperratio-Sig_Mean_Qvalue-all q-values
+            # Here chromosome number is the index of the three-column block in the both file
 
-    print(f"  完成处理 {len(common_site_details)} 个位点")
+    print(f"  finished processing {len(common_site_details)}  sites")
 
-    # 6. 生成结果DataFrame
+    # 6. Generate result DataFrame
     result_df = pd.DataFrame(common_site_details)
-    result_df = result_df.sort_values(['Methylation_Type', 'Chromosome', 'Position']) # 排序
+    result_df = result_df.sort_values(['Methylation_Type', 'Chromosome', 'Position']) # Sort
 
-    # 可选：final DMP lowdiff strict vote 后处理。
-    # 这里按甲基化类型分别执行；cutoff可以全局固定为0.3，但support_count、base_required、
-    # boundary_abs_methdiff、诊断表都必须按CpG/CHG/CHH分别计算。
+    # Optional final-DMP low-difference strict-vote post-processing.
+    # Execute separately by methylation type. The cutoff can be fixed globally at 0.3, but support_count, base_required,
+    # boundary_abs_methdiff, and diagnostic tables must be calculated separately for CpG/CHG/CHH.
     if DMP_LOWDIFF_STRICT_VOTE or DMP_LOWDIFF_STRICT_VOTE_REPORT_ONLY:
         result_df = apply_dmp_lowdiff_strict_vote_to_result_df(
             result_df=result_df,
@@ -6235,45 +6258,45 @@ def find_common_significant_sites(output_dirs=None, methytype2='CpG', dir1=None,
             auto_vote_threshold=auto_vote_threshold,
         )
 
-    # 调整列顺序，将Methylation_Change放在更靠前的位置
+    # Adjust column order and move Methylation_Change earlier
     column_order = [
         'Chromosome', 'Methylation_Type', 'Position',
         'Methylation_Change', 'Hyper_Ratio', 'Hyper_Count', 'Hypo_Count', 'Num_Comparisons',
         'Sig_Mean_Qvalue'
     ]
-    # 获取所有replicate列名并排序
-    # 新的列名格式：dir2_y_dir1_x，需要获取包含下划线分隔数字的列
+    # Get and sort all replicate column names
+    # New column-name format: dir2_y_dir1_x; need to get columns containing underscore-separated numbers
     replicate_columns = sorted(
         [col for col in result_df.columns if col.startswith('qvalue_')],
-        key=lambda x: tuple(map(int, re.findall(r'\d+', x)))  # 提取所有数字并排序
+        key=lambda x: tuple(map(int, re.findall(r'\d+', x)))  # Extract all numbers and sort
     )
     column_order = column_order + replicate_columns
     result_df = result_df[column_order]
 
-    # 保存结果
+    # Save results
     output_file = os.path.join(and_output_dir, f"{methytype2}-final_significant_sites_DMPs.txt")
     result_df.to_csv(output_file, sep='\t', index=False)
-    print(f"\n共同显著位点已保存至: {output_file}")
+    print(f"\nCommon significant sites have been saved to: {output_file}")
 
-    # 输出统计信息
-    print("\n共同显著位点统计:")
+    # Print summary statistics
+    print("\nCommon significant-site statistics:")
     mtype = methytype2
     mtype_df = result_df
     count = len(mtype_df)
     if count == 0:
-        print(f"  {mtype}: 0 个位点")
+        print(f"  {mtype}: 0  sites")
         return result_df
     hyper_count = len(mtype_df[mtype_df['Methylation_Change'] == 1])
     hypo_count = len(mtype_df[mtype_df['Methylation_Change'] == 0])
     unknown_count = len(mtype_df[mtype_df['Methylation_Change'] == -1])
 
-    print(f"  {mtype}: {count} 个位点")
-    print(f"    - 高甲基化(Change=1): {hyper_count} ({hyper_count / count * 100:.1f}%)")
-    print(f"    - 低甲基化(Change=0): {hypo_count} ({hypo_count / count * 100:.1f}%)")
+    print(f"  {mtype}: {count}  sites")
+    print(f"    - hypermethylated(Change=1): {hyper_count} ({hyper_count / count * 100:.1f}%)")
+    print(f"    - hypomethylated(Change=0): {hypo_count} ({hypo_count / count * 100:.1f}%)")
     if unknown_count > 0:
-        print(f"    - 未知(Change=-1): {unknown_count} ({unknown_count / count * 100:.1f}%)")
+        print(f"    - unknown(Change=-1): {unknown_count} ({unknown_count / count * 100:.1f}%)")
 
-    return result_df # 其格式为：'Chromosome', 'Methylation_Type', 'Position',
+    return result_df # Its format is:'Chromosome', 'Methylation_Type', 'Position',
                             # 'Methylation_Change', 'Hyper_Ratio', 'Hyper_Count', 'Hypo_Count',
                            # 'Sig_Mean_Qvalue', 'Max_Qvalue', 'Min_Qvalue', 'Num_Comparisons'
 
@@ -6286,102 +6309,104 @@ def sliding_window_analysis(
         outputdir1="./"
 ):
     """
-    对甲基化位点数据进行滑动窗口分析
-    参数：
-    input_data : 是m*n*3次中一次的某一条染色体的(N)dmp文件转换为的DataFrame，包含列: ['position', 'pvalue', 'change']
-    window_size :滑动窗口的大小
-    step_ratio : 步长比例（窗口大小的百分比）
-    save_files : 是否保存结果文件
-    output_identifier : 输出文件前缀，如果save_files=True且未提供则自动生成
+    Run sliding-window analysis on methylation-site data.
+
+    Parameters:
+        input_data: DataFrame converted from one chromosome-level (N)DMP file from one of the m*n*3 tests;
+            it contains columns ['position', 'pvalue', 'change'].
+        window_size: sliding-window size.
+        step_ratio: step-size ratio as a percentage of the window size.
+        save_files: whether to save result files.
+        output_identifier: output-file prefix; if save_files=True and this is not provided, it is generated automatically.
     """
 
-    # 1. 数据读取和预处理
+    # 1. Data loading and preprocessing
     df = input_data.copy()
 
-    # 确保列名正确
+    # Ensure column names are correct
     expected_cols = ['position', 'pvalue', 'change']
     if not all(col in df.columns for col in expected_cols):
-        raise ValueError(f"DataFrame必须包含列: {expected_cols}")
+        raise ValueError(f"DataFramemust contain columns: {expected_cols}")
 
     if output_identifier is None:
         output_identifier = "sliding_window_analysis"
 
-    # 数据验证和清理
+    # Validate and clean data
     df = df.dropna()
     if len(df) == 0:
-        raise ValueError("没有有效的数据行")
+        raise ValueError("no valid data rows")
 
-    # 按位点号排序
-    df = df.sort_values('position').reset_index(drop=True) #重排dataframe索引，且不将原来的索引变作新的一列
+    # Sort by position
+    df = df.sort_values('position').reset_index(drop=True) # Reset the DataFrame index without keeping the old index as a new column
 
-    print(f"数据预处理完成，共 {len(df)} 个位点")
+    print(f"Data preprocessing completed,with {len(df)}  sites")
 
-    # 2. 滑动窗口分析
-    positions = df['position'].values #获取所有位点号（前面已经排了序了）
-    changes = df['change'].values #获取所有甲基化变化方向
+    # 2. Sliding-window analysis
+    positions = df['position'].values # Get all positions; they have already been sorted
+    changes = df['change'].values # Get all methylation-change directions
 
-    last_pos = positions[-1] #获取到最后一个位点号
-    step_size = int(window_size * step_ratio) #计算得到窗口每一步位移的大小
+    last_pos = positions[-1] # Get the last position
+    step_size = int(window_size * step_ratio) # Calculate the step size for each window shift
 
-    # 生成所有窗口的起始位置
-    window_starts = np.arange(0, last_pos + step_size, step_size) #中间+step_size是为了使得最后一个区间覆盖last_pos这个位点
+    # Generate start positions for all windows
+    window_starts = np.arange(0, last_pos + step_size, step_size) # The +step_size ensures the last interval covers last_pos
 
-    print(f"窗口配置: 大小={window_size}, 步长={step_size}, 窗口数={len(window_starts)}")
+    print(f"Window configuration: size={window_size}, step size={step_size}, number of windows={len(window_starts)}")
 
-    #创建列表用于存储后续每个区间的首尾位点号和不同甲基化变化方向的数量以及总显著位点数
+    # Create a list to store start/end positions, counts of each methylation-change direction, and total significant-site counts for each interval
     results = []
 
-    for i, start in enumerate(window_starts): # start每次赋值为每个窗口的起始点位点号-1（比如第一次是0）
-        if i % 1000 == 0:  # 进度提示
-            print(f"处理进度: {i}/{len(window_starts)}")
+    for i, start in enumerate(window_starts): # Each start is set to the window start position minus 1 (e.g., 0 for the first window)
+        if i % 1000 == 0:  # Progress message
+            print(f"processing progress: {i}/{len(window_starts)}")
 
-        end = start + window_size  # 根据窗口宽度计算得到窗口的终止点
+        end = start + window_size  # Calculate the window end from the window width
 
-        # 使用numpy的searchsorted进行快速查找（相当于二分查找）
-        left_idx = np.searchsorted(positions, start, side='right') # 此处意为查找positions数组中第一个大于start的元素的下标
-        right_idx = np.searchsorted(positions, end, side='right') # 同理，查找positions数组中第一个大于end的元素的下标
+        # Use numpy.searchsorted for fast lookup, equivalent to binary search
+        left_idx = np.searchsorted(positions, start, side='right') # Find the index of the first element in positions greater than start
+        right_idx = np.searchsorted(positions, end, side='right') # Similarly, find the index of the first element in positions greater than end
 
-        # 在窗口内的位点
-        window_changes = changes[left_idx:right_idx] # 获取到pos在[start,end)宽度为window_size的那些位点的change构成的数组
-                                                    # 注意这里的left_idx和right_idx都是下标
-                            #left_idx:right_idx这个范围内都是pos位点号元素值>start&&<=end的，
-                         # 但是总的列表长度数量基本上不是window_size，会少很多，因为很多位点应该没有数据
-        # 统计不同类别的数量
-        num_change_1 = np.sum(window_changes == 1)   # 统计hyper的数量
-        num_change_0 = np.sum(window_changes == 0)  # 统计hypo的数量，或者用 len(window_changes) - num_change_1
+        # Sites inside the window
+        window_changes = changes[left_idx:right_idx] # Get the change array for positions in the [start, end) window of width window_size
+                                                    # Note that left_idx and right_idx are both indices
+                            # The left_idx:right_idx range contains positions with values > start and <= end,
+                         # but the number of records is usually much smaller than window_size because many positions have no data
+        # Count categories
+        num_change_1 = np.sum(window_changes == 1)   # Count hypermethylated sites
+        num_change_0 = np.sum(window_changes == 0)  # Count hypomethylated sites, or use len(window_changes) - num_change_1
 
         results.append({
-            'window_start': start + 1,  # start+1才是每个窗口真正的位点号的起始点
-            'window_end': end,   #start+1到end刚好window_size个位点被统计
+            'window_start': start + 1,  # start + 1 is the true genomic start position of each window
+            'window_end': end,   # Positions from start + 1 to end cover exactly window_size bases
             'count_change_1': num_change_1,
             'count_change_0': num_change_0,
-            'total_count': num_change_1 + num_change_0 # 当前行对应的区间内的所有位点的甲基化变化方向（突变型相对于野生型）
-                                                # 也是当前行对应区间的所有位点的总显著位点数量，因为一次检验会有一个变化方向
-                                            #  而因为是从DMP文件中读来的，所有都是显著的
+            'total_count': num_change_1 + num_change_0 # Methylation-change directions for all sites in the current interval (mutant relative to wild type)
+                                                # This is also the total significant-site count for the current interval because each test has one change direction
+                                            # Since records are read from a DMP file, all are significant
         })
 
-    # 转换为DataFrame
+    # Convert to DataFrame
     sliding_results = pd.DataFrame(results)
 
-    # 3. 标准化处理
-    max_count = sliding_results['total_count'].max()  # 所有区间中最大的那个总显著位点数
+    # 3. Standardization
+    max_count = sliding_results['total_count'].max()  # Maximum total significant-site count across all intervals
     if max_count == 0:
-        max_count = 1  # 避免除零
+        max_count = 1  # Avoid division by zero
 
     standardized_results = sliding_results.copy()
-    standardized_results['standardized_count'] = sliding_results['total_count'] / max_count #求得当前区间总显著位点数与所有区间中
-                                                                                        # 最大的那个显著位点数的比值
-    # 选择需要的列用于标准化输出
+    standardized_results['standardized_count'] = sliding_results['total_count'] / max_count # Calculate the ratio of the current interval total significant-site count to the
+                                                                                        # maximum significant-site count across intervals
+    # Select required columns for standardized output
     standardized_results = standardized_results[[
         'window_start', 'window_end', 'total_count', 'standardized_count'
     ]]
 
-    print(f"滑动窗口分析完成，共生成 {len(sliding_results)} 个窗口")
-    print(f"最大计数: {max_count}")
+    print(f"Sliding-window analysis completed,generated {len(sliding_results)} windows")
+    print(f"maximum count: {max_count}")
 
-    # 4. 保存文件
+    # 4. Save files
     if save_files:
-        # 滑动窗口结果
+        # Sliding-window results
         sliding_file = f"slidingW_{output_identifier}.txt"
         sliding_file = os.path.join(outputdir1, sliding_file)
         sliding_results[['window_start', 'window_end', 'count_change_1', 'count_change_0']].to_csv(
@@ -6391,25 +6416,25 @@ def sliding_window_analysis(
             header=False
         )
 
-        # 标准化结果
+        # Standardized results
         std_file = f"noTitle_allDMCs_new_Standardized_slidingW_{output_identifier}.txt"
         std_file = os.path.join(outputdir1, std_file)
-        # 格式化输出以匹配原始C++风格的对齐
+        # Format output to match the original C++-style alignment
         standardized_results.to_csv(
             std_file,
             sep='\t',
             index=False,
             header=False,
-            float_format='%.6f'  # 控制浮点数精度
+            float_format='%.6f'  # Control floating-point precision
         )
 
-        print(f"结果已保存:")
-        print(f"  滑动窗口: {sliding_file}")
-        print(f"  标准化结果: {std_file}")
+        print(f"Results saved:")
+        print(f"  sliding window: {sliding_file}")
+        print(f"  standardized results: {std_file}")
 
     return sliding_results, standardized_results
-    # 前者格式为window_start,window_end,count_change_1,count_change_0,total_count
-                        #后者没有count_change，而有standardized_count，即每个区间显著位点数与最大的那个显著位点数的比值
+    # The former format is window_start, window_end, count_change_1, count_change_0, total_count
+                        # The latter has no count_change but has standardized_count, the ratio of significant-site count in each interval to the maximum interval count
 
 def process_common_sites_sliding_window(common_sites_df=None,
                                         window_size=1000000,
@@ -6417,52 +6442,53 @@ def process_common_sites_sliding_window(common_sites_df=None,
                                         methytype='CpG',
                                         work_dir="."):
     """
-    对共同显著位点进行滑动窗口分析
-    参数：
-    common_sites_df : 共同显著位点数据，如果为None则自动加载
-    window_size : 滑动窗口大小
-    step_ratio : 步长比例
-    methytype : 甲基化类型
+    Run sliding-window analysis on common significant sites.
+
+    Parameters:
+        common_sites_df: common significant-site data; if None, it is loaded automatically.
+        window_size: sliding-window size.
+        step_ratio: step-size ratio.
+        methytype: methylation context.
     """
 
-    print(f"\n开始对共同显著位点进行滑动窗口分析...")
+    print(f"\nStarting sliding-window analysis for common significant sites...")
 
     and_output_dir = os.path.join(work_dir, "and_output")
     os.makedirs(and_output_dir, exist_ok=True)
 
-    # 1. 加载共同显著位点数据
+    # 1. Load common significant-site data
     if common_sites_df is None:
         common_file = os.path.join(and_output_dir, f"{methytype}-final_significant_sites_DMPs.txt")
         if not os.path.exists(common_file):
-            print(f"错误：共同显著位点文件不存在 {common_file}")
+            print(f"ERROR:common significant-site file does not exist {common_file}")
             return None
         common_sites_df = pd.read_csv(common_file, sep='\t')
-        print(f"从文件加载共同显著位点: {len(common_sites_df)} 个位点")
+        print(f"Loaded common significant sites from file: {len(common_sites_df)}  sites")
 
     if common_sites_df.empty:
-        print("没有共同显著位点数据")
+        print("No common significant-site data")
         return None
 
-    # 2. 按染色体分组
+    # 2. Group by chromosome
     results = {}
 
-    # 按染色体分组处理
-    chr_groups = common_sites_df.groupby('Chromosome') #获取一个迭代器，可以迭代获取每个染色体号及其对应的子df
+    # Process by chromosome group
+    chr_groups = common_sites_df.groupby('Chromosome') # Get an iterator over chromosome labels and their corresponding sub-dataframes
 
-    for chr_num, chr_data in chr_groups: # 迭代获取每个染色体号及其对应的子df
-        print(f"\n  处理染色体 {chr_num}: {len(chr_data)} 个位点")
+    for chr_num, chr_data in chr_groups: # Iterate over chromosome labels and their corresponding sub-dataframes
+        print(f"\n  Processing chromosome {chr_num}: {len(chr_data)}  sites")
 
-        # 准备滑动窗口分析的数据，保持和all_simple_chr文件相同的格式以确保顺利进行
+        # Prepare data for sliding-window analysis in the same format as all_simple_chr files to ensure compatibility
         window_data = pd.DataFrame({
             'position': chr_data['Position'].astype(int),
             'pvalue': chr_data['Sig_Mean_Qvalue'],
             'change': chr_data['Methylation_Change']
         })
 
-        # 排序
+        # Sort
         window_data = window_data.sort_values('position').reset_index(drop=True)
 
-        # 执行滑动窗口分析，调用之前的函数就行
+        # Run sliding-window analysis by calling the existing function
         try:
             sliding_results, std_results = sliding_window_analysis(
                 window_data,
@@ -6473,31 +6499,33 @@ def process_common_sites_sliding_window(common_sites_df=None,
                 outputdir1=and_output_dir
             )
 
-            # 收集结果文件
+            # Collect result files
             results[chr_num] = {
                 'sliding_results': sliding_results,
                 'standardized_results': std_results,
                 'input_data': window_data
             }
 
-            print(f"    完成染色体 {chr_num}: {len(sliding_results)} 个窗口")
+            print(f"    completed chromosome {chr_num}: {len(sliding_results)} windows")
 
         except Exception as e:
-            print(f"    错误：处理染色体 {chr_num} 失败: {e}")
+            print(f"    ERROR:Processing chromosome {chr_num} failed: {e}")
             continue
 
-    print(f"结果保存在以 'common_sites_{methytype}_Chr' 开头的文件中")
+    print(f"Results are saved in files starting with 'common_sites_{methytype}_Chr' ")
 
     return results
 
 def find_max_total_in_outputs(output_dirs, methylation_type):
     """
-    查找所有输出目录中指定甲基化类型的最大total值
-    参数：
-        output_dirs: 输出目录列表
-        methylation_type: 甲基化类型（CpG, CHH, CHG）
-    返回：
-        max_total: 最大total值
+    Find the maximum total value for a specified methylation type across all output directories.
+
+    Parameters:
+        output_dirs: list of output directories.
+        methylation_type: methylation context (CpG, CHH, CHG).
+
+    Returns:
+        max_total: maximum total value.
     """
     max_total = 0
 
@@ -6506,7 +6534,7 @@ def find_max_total_in_outputs(output_dirs, methylation_type):
         if not os.path.exists(mtype_dir):
             continue
 
-        # 查找所有DMP标准化文件
+        # Find all standardized DMP files
         std_files = glob.glob(os.path.join(mtype_dir, "noTitle_allDMCs_new_Standardized_slidingW_DMP_*.txt"))
 
         for std_file in std_files:
@@ -6522,31 +6550,32 @@ def find_max_total_in_outputs(output_dirs, methylation_type):
                     if file_max > max_total:
                         max_total = file_max
             except Exception as e:
-                print(f"    警告: 读取 {std_file} 时出错: {e}")
+                print(f"    WARNING: read {std_file}:  {e}")
                 continue
 
-    print(f"  {methylation_type} 类型所有染色体中最大的total值为: {max_total}")
+    print(f"  {methylation_type} largest value across all chromosomes for contexttotalis: {max_total}")
     return max_total
 
 
 def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="."):
     """
-    对所有滑动窗口结果进行可视化并保存到磁盘
-    使用全局max_total进行标准化，使不同染色体具有可比性
-    参数：
-    output_dir : 指定输出目录，如果为None则自动扫描所有output_x_y目录
-    chr_series : 染色体映射Series
+    Visualize all sliding-window results and save the figures to disk.
+    Global max_total is used for normalization so that different chromosomes are comparable.
+
+    Parameters:
+        output_dir: specified output directory; if None, all output_x_y directories are scanned automatically.
+        chr_series: chromosome mapping Series.
     """
 
-    matplotlib.use('Agg')  # 使用非交互式后端
+    matplotlib.use('Agg')  # Use a non-interactive backend
 
-    # 设置中文字体
+    # Set Chinese font
     #plt.rcParams['font.sans-serif'] = ['SimHei']
     plt.rcParams['axes.unicode_minus'] = False
 
-    print("\n开始生成甲基化滑动窗口可视化图表")
+    print("\nStarting methylation sliding-window visualization plot generation")
 
-    # 扫描所有输出目录
+    # Scan all output directories
     if output_dir is None:
         output_dirs = glob.glob(os.path.join(work_dir, "output_*_*"))
         output_dirs = [d for d in output_dirs if os.path.isdir(d)]
@@ -6554,34 +6583,34 @@ def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="
         output_dirs = [output_dir]
 
     if not output_dirs:
-        print("未找到输出目录")
+        print("No output directories found")
         return
 
     total_plots = 0
     methylation_types = ['CpG', 'CHH', 'CHG']
 
-    # 为每种甲基化类型分别计算全局max_total
+    # Calculate global max_total separately for each methylation type
     max_totals = {}
     for mtype in methylation_types:
         max_totals[mtype] = find_max_total_in_outputs(output_dirs, mtype)
         if max_totals[mtype] == 0:
-            print(f"  警告: {mtype} 类型未找到有效的total值，将使用1作为默认值")
+            print(f"  WARNING: {mtype} context has no validtotalvalue,will use1as the default value")
             max_totals[mtype] = 1
 
     for out_dir in output_dirs:
-        print(f"\n处理目录: {out_dir}")
+        print(f"\nProcessing directory: {out_dir}")
 
         for mtype in methylation_types:
             mtype_dir = os.path.join(out_dir, mtype)
             if not os.path.exists(mtype_dir):
                 continue
 
-            print(f"  处理甲基化类型: {mtype}（使用全局max_total={max_totals[mtype]}）")
+            print(f"  Processing methylation context: {mtype}(using global max_total={max_totals[mtype]})")
 
-            # 查找当前甲基化目录下所有DMP滑动窗口文件
+            # Find all DMP sliding-window files under the current methylation directory
             dmp_sliding_files = glob.glob(os.path.join(mtype_dir, "slidingW_DMP_*.txt"))
 
-            # 按前缀分组处理，同一前缀的所有染色体绘制在一张大图上
+            # Group by prefix and draw all chromosomes with the same prefix in one large figure
             prefix_groups = {}
             for dmp_sliding_file in dmp_sliding_files:
                 basename = os.path.basename(dmp_sliding_file)
@@ -6596,20 +6625,20 @@ def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="
                     prefix_groups[prefix] = []
                 prefix_groups[prefix].append(chr_num)
 
-            # 对每个前缀组进行处理
+            # Process each prefix group
             for prefix, chr_nums in prefix_groups.items():
-                # 对染色体编号排序
+                # Sort chromosome numbers
                 chr_nums = sorted(chr_nums, key=lambda x: int(x))
 
-                # 收集所有染色体的数据
+                # Collect data for all chromosomes
                 all_chrom_data = []
                 chrom_names = []
 
                 for chr_num in chr_nums:
-                    # 构建对应的标准化文件路径
+                    # Construct the corresponding standardized-file path
                     chr_name = get_chr_name(chr_num, chr_series)
 
-                    # 修正：使用正确的变量名构建文件路径
+                    # Fix: use the correct variable name to construct the file path
                     dmp_sliding_file = os.path.join(mtype_dir, f"slidingW_DMP_{prefix}_Chr{chr_num}.txt")
                     dmp_std_file = os.path.join(mtype_dir,
                                                 f"noTitle_allDMCs_new_Standardized_slidingW_DMP_{prefix}_Chr{chr_num}.txt")
@@ -6617,11 +6646,11 @@ def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="
                                                  f"noTitle_allDMCs_new_Standardized_slidingW_N-DMP_{prefix}_Chr{chr_num}.txt")
 
                     if not all(os.path.exists(f) for f in [dmp_sliding_file, dmp_std_file, ndmp_std_file]):
-                        print(f"    警告: Chr{chr_num} 的文件不完整，跳过")
+                        print(f"    WARNING: Chr{chr_num} file is incomplete; skipping")
                         continue
 
                     try:
-                        # 读取数据
+                        # Read data
                         sliding_df = pd.read_csv(
                             dmp_sliding_file,
                             sep=r'\s+',
@@ -6644,21 +6673,21 @@ def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="
                         )
 
                         if sliding_df.empty or dmp_std_df.empty or ndmp_std_df.empty:
-                            print(f"    警告: Chr{chr_num} 的数据为空，跳过")
+                            print(f"    WARNING: Chr{chr_num} data are empty; skipping")
                             continue
 
-                        # 使用全局max_total重新计算比率
+                        # Recalculate ratios using global max_total
                         max_total = max_totals[mtype]
 
                         x = (sliding_df['start'] + sliding_df['end']) / 2
 
-                        # 重新计算所有比率（使用全局max_total）
+                        # Recalculate all ratios using global max_total
                         y_dmp = (sliding_df['hyper'] + sliding_df['hypo']) / max_total
                         y_hyper = sliding_df['hyper'] / max_total
                         y_hypo = sliding_df['hypo'] / max_total
-                        y_ndmp = ndmp_std_df['ndmp_normalized']  # NDMP保持原样
+                        y_ndmp = ndmp_std_df['ndmp_normalized']  # Keep NDMP unchanged
 
-                        # 处理可能的长度不一致
+                        # Handle possible length mismatch
                         max_len = max(len(x), len(y_dmp), len(y_hyper), len(y_hypo), len(y_ndmp))
                         x = x.reindex(range(max_len), fill_value=0)
                         y_dmp = y_dmp.reindex(range(max_len), fill_value=0)
@@ -6666,7 +6695,7 @@ def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="
                         y_hypo = y_hypo.reindex(range(max_len), fill_value=0)
                         y_ndmp = y_ndmp.reindex(range(max_len), fill_value=0)
 
-                        # 存储数据
+                        # Storedata
                         all_chrom_data.append({
                             'x': x,
                             'y_dmp': y_dmp,
@@ -6676,32 +6705,32 @@ def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="
                         })
                         chrom_names.append(chr_name)
 
-                        print(f"    成功加载染色体 {chr_name} 的数据")
+                        print(f"    successfully loadedchromosome {chr_name}  data")
 
                     except Exception as e:
-                        print(f"    处理 Chr{chr_num} 时出错: {e}")
+                        print(f"    Processing Chr{chr_num}:  {e}")
                         continue
 
-                # 如果有数据，绘制大图
+                # If data are available, draw the large figure
                 if all_chrom_data:
                     try:
-                        # 创建大图，每个染色体一个子图
+                        # Create a large figure with one subplot per chromosome
                         n_chromosomes = len(all_chrom_data)
                         fig, axes = plt.subplots(n_chromosomes, 1, figsize=(15, 3 * n_chromosomes))
 
-                        # 如果只有一个染色体，axes不是数组，需要转换为数组
+                        # If there is only one chromosome, axes is not an array and must be converted to an array
                         if n_chromosomes == 1:
                             axes = [axes]
 
-                        # 设置总标题
+                        # Set figure title
                         fig.suptitle(f'{mtype} Methylation Analysis - {prefix} (Global Normalized)',
                                      fontsize=16, fontfamily='DejaVu Sans')
 
-                        # 绘制每个染色体的子图
+                        # Draw the subplot for each chromosome
                         for idx, (chrom_data, chrom_name) in enumerate(zip(all_chrom_data, chrom_names)):
                             ax = axes[idx]
 
-                            # 绘制所有数据线
+                            # Draw all data lines
                             ax.plot(chrom_data['x'], chrom_data['y_dmp'], label='DMP', color='red', linewidth=1.5)
                             ax.plot(chrom_data['x'], chrom_data['y_hyper'], label='Hyper-ratio', color='green',
                                     linewidth=1)
@@ -6713,52 +6742,52 @@ def plot_methylation_sliding_windows(output_dir=None, chr_series=None,work_dir="
                             ax.set_ylim(bottom=0)
                             ax.set_ylabel('Ratio', fontsize=10, fontfamily='DejaVu Sans')
 
-                            # 设置子图标题
+                            # Set subplot title
                             ax.set_title(f'{chrom_name}', fontsize=18, fontfamily='DejaVu Sans', pad=20,y=-0.4)
 
-                            # 添加网格
+                            # Add grid
                             ax.grid(True, alpha=0.3)
 
-                            # 只在第一个子图添加完整图例
+                            # Add the full legend only to the first subplot
                             if idx == 0:
                                 ax.legend(loc='upper right', ncol=2, fontsize=8, framealpha=0.7)
 
-                        # 调整布局
-                        plt.tight_layout(rect=[0, 0, 1, 0.96])  # 为总标题留出空间
+                        # Adjust layout
+                        plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the figure title
 
-                        # 保存图片
+                        # Save figure
                         plot_filename = os.path.join(mtype_dir,
                                                      f"methylation_plot_{mtype}_{prefix}_all_chromosomes.png")
                         plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
                         plt.close()
 
                         total_plots += 1
-                        print(f"    成功生成大图: {mtype}_{prefix} -> {os.path.basename(plot_filename)}")
+                        print(f"    successfully generated large plot: {mtype}_{prefix} -> {os.path.basename(plot_filename)}")
 
                     except Exception as e:
-                        print(f"    绘制大图时出错: {e}")
+                        print(f"    error while drawing large plot: {e}")
                         continue
 
-    print(f"\n图表生成完成！共生成 {total_plots} 张大图")
+    print(f"\nPlot generation completed!generated {total_plots} large plots")
 
 
 def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir="."):
     """
-    对共同显著位点的滑动窗口结果进行可视化并保存到磁盘
-    使用全局max_total进行标准化，将所有染色体绘制在一张大图上
+    Visualize sliding-window results for common significant sites and save the figures to disk.
+    Global max_total is used for normalization, and all chromosomes are drawn in one large figure.
     """
     matplotlib.use('Agg')
 
-    # 设置全局字体为DejaVu Sans
+    # Set the global font to DejaVu Sans
     plt.rcParams['font.family'] = 'DejaVu Sans'
     plt.rcParams['axes.unicode_minus'] = False
 
-    print(f"\n开始生成共同显著位点({methytype})的滑动窗口可视化图表...")
+    print(f"\nStarting common significant-site({methytype})sliding-window visualization plot generation...")
 
     and_output_dir = os.path.join(work_dir, "and_output")
 
-    # 先找到该甲基化类型的全局max_total
-    print(f"  正在查找 {methytype} 的全局max_total...")
+    # First find the global max_total for this methylation type
+    print(f"  searching for {methytype}  global max_total...")
     max_total = 0
     std_files = glob.glob(
         os.path.join(and_output_dir, f"noTitle_allDMCs_new_Standardized_slidingW_common_sites_{methytype}_Chr*.txt"))
@@ -6771,16 +6800,16 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
                 if file_max > max_total:
                     max_total = file_max
         except Exception as e:
-            print(f"    警告: 读取 {std_file} 时出错: {e}")
+            print(f"    WARNING: read {std_file}:  {e}")
 
     if max_total == 0:
-        print(f"  警告: 未找到有效的total值，使用默认值1")
+        print(f"  WARNING: no validtotalvalue,using default value1")
         max_total = 1
     else:
-        print(f"  {methytype} 的全局max_total为: {max_total}")
+        print(f"  {methytype}  global max_totalfor: {max_total}")
 
-    # 读取DMR数据 - 根据甲基化类型选择对应的DMR文件
-    print("  正在读取DMR数据...")
+    # Read DMR data and choose the corresponding DMR file according to methylation type
+    print("  reading DMR data...")
     dmr_file = os.path.join(and_output_dir, f"{methytype}-final_significant_regions_DMRs.txt")
     dmr_data = {}
     if os.path.exists(dmr_file):
@@ -6789,15 +6818,15 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
 
             for _, row in dmr_df.iterrows():
                 try:
-                    chrom = str(row['Chromosome'])  # 基于列名访问
-                    direction = int(row['Direction'])  # 基于列名访问
-                    start = int(row['DMR_start'])  # 基于列名访问
-                    end = int(row['DMR_end'])  # 基于列名访问
+                    chrom = str(row['Chromosome'])  # Access by column name
+                    direction = int(row['Direction'])  # Access by column name
+                    start = int(row['DMR_start'])  # Access by column name
+                    end = int(row['DMR_end'])  # Access by column name
 
-                    # 计算中点
+                    # Calculate midpoint
                     mid = (start + end) / 2
 
-                    # 提取染色体数字部分
+                    # Extract numeric part of chromosome label
                     chrom_num = str(chrom).replace('Chr', '').replace('chr', '')
 
                     if chrom_num not in dmr_data:
@@ -6806,16 +6835,16 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
                     dmr_data[chrom_num].append((mid, direction))
                 except (ValueError, IndexError):
                     continue
-            print(f"  成功加载 {sum(len(dmrs) for dmrs in dmr_data.values())} 个DMR")
+            print(f"  successfully loaded {sum(len(dmrs) for dmrs in dmr_data.values())} DMR")
         except Exception as e:
-            print(f"  读取DMR文件时出错: {e}")
+            print(f"  readDMR file error: {e}")
     else:
-        print(f"  警告: DMR文件 {dmr_file} 不存在")
+        print(f"  WARNING: DMR file {dmr_file} does not exist")
 
-    # 动态获取染色体列表
+    # Get chromosome list dynamically
     sliding_files = glob.glob(os.path.join(and_output_dir, f"slidingW_common_sites_{methytype}_Chr*.txt"))
 
-    # 从文件名中提取染色体编号并排序
+    # Extract chromosome numbers from file names and sort
     chromosomes = []
     for file in sliding_files:
         match = re.search(r'slidingW_common_sites_.+_Chr(\d+)\.txt$', os.path.basename(file))
@@ -6824,14 +6853,14 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
             if chr_num not in chromosomes:
                 chromosomes.append(chr_num)
 
-    # 按数字顺序排序染色体
+    # Sort chromosomes numerically
     chromosomes.sort(key=int)
 
     if not chromosomes:
-        print(f"未找到共同显著位点({methytype})的滑动窗口文件")
+        print(f"No common significant sites found for({methytype})ofsliding windowfile")
         return
 
-    print(f"找到 {len(chromosomes)} 个染色体的滑动窗口文件")
+    print(f"Found {len(chromosomes)}  chromosomesofsliding windowfile")
 
     all_chrom_data = []
     chrom_nums1 = []
@@ -6842,39 +6871,39 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
                                 f"noTitle_allDMCs_new_Standardized_slidingW_common_sites_{methytype}_Chr{chr_num}.txt")
 
         if not all(os.path.exists(f) for f in [sliding_file, std_file]):
-            print(f"    警告: Chr{chr_num} 的文件不完整，跳过")
+            print(f"    WARNING: Chr{chr_num} file is incomplete; skipping")
             continue
 
         try:
-            # 读取数据
+            # Read data
             sliding_df = pd.read_csv(sliding_file, sep=r'\s+', header=None, names=['start', 'end', 'hyper', 'hypo'])
             std_df = pd.read_csv(std_file, sep=r'\s+', header=None, names=['start', 'end', 'total', 'normalized'])
 
             if sliding_df.empty or std_df.empty:
-                print(f"    警告: Chr{chr_num} 的数据为空，跳过")
+                print(f"    WARNING: Chr{chr_num} data are empty; skipping")
                 continue
 
             if len(sliding_df) != len(std_df):
-                print(f"    警告: Chr{chr_num} 的数据长度不一致，跳过")
+                print(f"    WARNING: Chr{chr_num} data lengths are inconsistent; skipping")
                 continue
 
-            # 新增：读取 output_1_1 的 NDMP 数据
+            # New: read NDMP data from output_1_1
             ndmp_file = os.path.join(work_dir, "output_wt1_mut1", methytype,
                                      f"noTitle_allDMCs_new_Standardized_slidingW_N-DMP_wt_replicate1_mut_replicate1_Chr{chr_num}.txt")
-            y_ndmp = None  # 初始化为None
+            y_ndmp = None  # Initialize as None
             if os.path.exists(ndmp_file):
                 try:
                     ndmp_df = pd.read_csv(ndmp_file, sep=r'\s+', header=None,
                                           names=['start', 'end', 'total', 'ndmp_normalized'])
                     if not ndmp_df.empty:
                         y_ndmp = ndmp_df['ndmp_normalized']
-                        print(f"    成功读取 output_1_1 的 NDMP 数据: Chr{chr_num}")
+                        print(f"    successfully read output_1_1 NDMP data: Chr{chr_num}")
                 except Exception as e:
-                    print(f"    警告: 读取 output_1_1 NDMP 数据失败 (Chr{chr_num}): {e}")
+                    print(f"    WARNING: read output_1_1 NDMP data failed (Chr{chr_num}): {e}")
             else:
-                print(f"    提示: output_1_1 的 NDMP 文件不存在 (Chr{chr_num})")
+                print(f"    Note: output_1_1 of NDMP filedoes not exist (Chr{chr_num})")
 
-            # 使用全局max_total重新计算比率
+            # Recalculate ratios using global max_total
             x = (sliding_df['start'] + sliding_df['end']) / 2
             y_total = (sliding_df['hyper'] + sliding_df['hypo']) / max_total
             y_hyper = sliding_df['hyper'] / max_total
@@ -6890,7 +6919,7 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
             if y_ndmp is not None:
                 y_ndmp = y_ndmp.reindex(range(max_len), fill_value=0)
 
-            # 存储数据
+            # Storedata
             chr_real_name = get_chr_name(chr_num, chr_series)
             all_chrom_data.append({
                 'x': x,
@@ -6900,32 +6929,32 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
                 'y_ndmp': y_ndmp
             })
             chrom_nums1.append(chr_num)
-            print(f"    成功加载染色体 {chr_real_name} 的数据")
+            print(f"    successfully loadedchromosome {chr_real_name}  data")
 
         except Exception as e:
-            print(f"    处理 Chr{chr_num} 时出错: {e}")
+            print(f"    Processing Chr{chr_num}:  {e}")
             continue
 
-    # 如果有数据，绘制大图
+    # If data are available, draw the large figure
     if all_chrom_data:
         try:
-            # 创建大图，包含多个子图
+            # Create a large figure with multiple subplots
             n_chromosomes = len(all_chrom_data)
             fig, axes = plt.subplots(n_chromosomes, 1, figsize=(15, 3 * n_chromosomes))
 
-            # 如果只有一个染色体，axes不是数组，需要转换为数组
+            # If there is only one chromosome, axes is not an array and must be converted to an array
             if n_chromosomes == 1:
                 axes = [axes]
 
-            # 设置总标题
+            # Set figure title
             fig.suptitle(f'Distribution of Common Significant Sites - {methytype} context',
                          fontsize=16, fontfamily='DejaVu Sans')
 
-            # 绘制每个染色体的子图
+            # Draw the subplot for each chromosome
             for idx, (chrom_data, chrom_num1) in enumerate(zip(all_chrom_data, chrom_nums1)):
                 ax = axes[idx]
 
-                # 绘制DMP数据
+                # Draw DMP data
                 ax.plot(chrom_data['x'], chrom_data['y_total'], label='DMP', color='red', linewidth=2)
                 ax.plot(chrom_data['x'], chrom_data['y_hyper'], label='hyper-methylation', color='green', linewidth=1.5)
                 ax.plot(chrom_data['x'], chrom_data['y_hypo'], label='hypo-methylation', color='blue', linewidth=1.5)
@@ -6934,37 +6963,37 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
                 if chrom_data['y_ndmp'] is not None:
                     ax.plot(chrom_data['x'], chrom_data['y_ndmp'], label='NDMP',
                             color='darkgray', linewidth=1.5)
-                # 统一设置Y轴范围为0到1.2
+                # Set a unified y-axis range from 0 to 1.2
                 ax.set_ylim(0, 1.2)
 
-                # 获取染色体号（从chrom_name中提取）
+                # Get chromosome number extracted from chrom_name
                 chrom_num1 = chrom_num1.replace('chr', '').replace('Chr', '')
 
-                if idx == 0:  # 只在第一个子图时打印一次
-                    print(f"  调试: dmr_data keys = {list(dmr_data.keys())}")
-                print(f"    {get_chr_name(chrom_num1,chr_series)} -> chrom_num = '{chrom_num1}', 在dmr_data中: {chrom_num1 in dmr_data}")
+                if idx == 0:  # Print only once for the first subplot
+                    print(f"  debug: dmr_data keys = {list(dmr_data.keys())}")
+                print(f"    {get_chr_name(chrom_num1,chr_series)} -> chrom_num = '{chrom_num1}', indmr_datain: {chrom_num1 in dmr_data}")
 
-                # 添加DMR标记
+                # Add DMR markers
                 if chrom_num1 in dmr_data:
                     for mid, direction in dmr_data[chrom_num1]:
-                        # 根据direction选择颜色：1=hyper(绿色), 0=hypo(蓝色)
+                        # Choose color by direction: 1 = hyper, 0 = hypo
                         color = 'green' if direction == 1 else 'blue'
-                        # 在DMR中点位置添加竖线，显示在Y轴1.0到1.2的范围内
+                        # Add vertical lines at DMR midpoints, shown within y-axis range 1.0 to 1.2
                         ax.axvline(x=mid, ymin=0.9, ymax=1, color=color, linewidth=2, alpha=0.7)
 
-                # 设置子图标题和标签
+                # Set subplot titles and labels
                 ax.text(0.5, -0.2, f"{get_chr_name(chrom_num1,chr_series)}",
                         transform=ax.transAxes,
                         fontfamily='DejaVu Sans',
                         ha='center', va='top',
                         fontsize=15)
 
-                # 添加网格
+                # Add grid
                 ax.grid(True, alpha=0.3)
 
-                # 只在第一个子图添加完整图例
+                # Add the full legend only to the first subplot
                 if idx == 0:
-                    # 创建自定义图例条目，包括DMR标记
+                    # Create custom legend entries including DMR markers
                     from matplotlib.lines import Line2D
                     legend_elements = [
                         Line2D([0], [0], color='red', linewidth=2, label='DMP'),
@@ -6973,7 +7002,7 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
                         Line2D([0], [0], color='green', linewidth=2, label='hyper-DMR'),
                         Line2D([0], [0], color='blue', linewidth=2, label='hypo-DMR')
                     ]
-                    # 如果有NDMP数据，添加到图例
+                    # If NDMP data are available, add them to the legend
                     if chrom_data['y_ndmp'] is not None:
                         legend_elements.append(
                             Line2D([0], [0], color='darkgray', linewidth=1.5,
@@ -6982,97 +7011,97 @@ def plot_common_sites_sliding_windows(methytype='CpG', chr_series=None, work_dir
                     ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.0, 0.95),
                               ncol=5, fontsize=8, framealpha=0.7)
 
-            # 调整布局
-            plt.tight_layout(rect=[0, 0, 1, 0.96])  # 为总标题留出空间
+            # Adjust layout
+            plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the figure title
 
-            # 保存图片
+            # Save figure
             plot_filename = os.path.join(and_output_dir, f"common_sites_plot_{methytype}_all_chromosomes.png")
             plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
             plt.close()
 
-            print(f"成功生成大图: {methytype} -> {os.path.basename(plot_filename)}")
+            print(f"successfully generated large plot: {methytype} -> {os.path.basename(plot_filename)}")
 
         except Exception as e:
-            print(f"绘制大图时出错: {e}")
+            print(f"error while drawing large plot: {e}")
     else:
-        print(f"未找到 {methytype} 的有效数据")
+        print(f"No {methytype} valid data")
 
 
 
 def rename_chromosome_files(chr_series, work_dir="."):
     """
-    批量重命名所有包含染色体号的文件，将Chr数字替换为真实染色体名称
+    Batch-rename files containing chromosome indices by replacing Chr-number labels with real chromosome names.
 
-    参数：
-        chr_series: 染色体映射Series (染色体名称 -> 索引)
-        work_dir: 工作目录
+    Parameters:
+        chr_series: chromosome mapping Series (chromosome name -> index).
+        work_dir: working directory.
     """
-    print("\n开始批量重命名染色体文件...")
+    print("\nStarting batch renaming of chromosome files...")
 
     if chr_series is None or len(chr_series) == 0:
-        print("错误：染色体映射为空，跳过重命名")
+        print("ERROR:chromosome mapping is empty; skipping renaming")
         return
 
-    # 创建反向映射：数字索引 -> 染色体名称
-    # chr_series 的 index 是染色体名称，value 是数字索引
+    # Create reverse mapping: numeric index -> chromosome name
+    # chr_series index is chromosome name and value is numeric index
     index_to_chr = {i: chr_series.index[i] for i in range(len(chr_series))}
 
-    print(f"染色体映射: {index_to_chr}")
+    print(f"chromosome mapping: {index_to_chr}")
 
-    # 定义需要搜索的目录模式
+    # Define directory patterns to search
     search_dirs = []
 
-    # 添加所有 output_x_y 目录
+    # Add all output_x_y directories
     output_dirs = glob.glob(os.path.join(work_dir, "output_*_*"))
     search_dirs.extend([d for d in output_dirs if os.path.isdir(d)])
 
-    # 添加 and_output 目录
+    # Add and_output directory
     and_output_dir = os.path.join(work_dir, "and_output")
     if os.path.exists(and_output_dir):
         search_dirs.append(and_output_dir)
 
     if not search_dirs:
-        print("未找到需要处理的目录")
+        print("No directories requiring processing were found")
         return
 
-    print(f"将在 {len(search_dirs)} 个目录中搜索文件")
+    print(f"Will search files in {len(search_dirs)} directories")
 
-    # 统计信息
+    # Summary statistics
     total_renamed = 0
     failed_renames = 0
 
-    # 定义匹配染色体号的正则表达式模式
-    # 匹配 Chr 后跟数字的模式，如 Chr1, Chr12 等
+    # Define regex pattern for matching chromosome numbers
+    # Match patterns where Chr is followed by digits, such as Chr1 or Chr12
     chr_pattern = re.compile(r'(.*?)Chr(\d+)(.*?)$')
 
-    # 遍历所有目录
+    # Iterate over all directories
     for search_dir in search_dirs:
-        print(f"\n处理目录: {search_dir}")
+        print(f"\nProcessing directory: {search_dir}")
 
-        # 递归遍历目录中的所有文件
+        # Recursively iterate over all files in the directory
         for root, dirs, files in os.walk(search_dir):
             for filename in files:
-                # 检查文件名是否包含 Chr数字 模式
+                # Check whether the file name contains the Chr + digits pattern
                 match = chr_pattern.match(filename)
 
                 if match:
-                    prefix = match.group(1)  # Chr 之前的部分
-                    chr_num = int(match.group(2))  # 染色体数字
-                    suffix = match.group(3)  # Chr数字 之后的部分
+                    prefix = match.group(1)  # Part before Chr
+                    chr_num = int(match.group(2))  # Chromosome number
+                    suffix = match.group(3)  # Part after Chr + digits
 
-                    # 根据 chr_series 获取真实染色体名称
-                    # 注意：文件名中的 Chr1 对应 index 0
+                    # Get the real chromosome name from chr_series
+                    # Note: Chr1 in file names corresponds to index 0
                     chr_index = chr_num - 1
 
                     if chr_index not in index_to_chr:
-                        print(f"  警告: Chr{chr_num} 不在映射表中，跳过文件 {filename}")
+                        print(f"  WARNING: Chr{chr_num} is not in the mapping table; skippingfile {filename}")
                         continue
 
                     real_chr_name = index_to_chr[chr_index]
 
-                    # 构造新文件名
-                    # 如果染色体名称本身包含 'chr' 前缀，直接使用
-                    # 否则使用 Chr 前缀
+                    # Construct new file name
+                    # If the chromosome name itself contains the 'chr' prefix, use it directly
+                    # Otherwise use the Chr prefix
                     if real_chr_name.lower().startswith('chr'):
                         chr_part = real_chr_name
                     else:
@@ -7080,187 +7109,187 @@ def rename_chromosome_files(chr_series, work_dir="."):
 
                     new_filename = f"{prefix}{chr_part}{suffix}"
 
-                    # 如果新旧文件名相同，跳过
+                    # Skip if the new and old file names are identical
                     if filename == new_filename:
                         continue
 
-                    # 构造完整路径
+                    # Construct full path
                     old_path = os.path.join(root, filename)
                     new_path = os.path.join(root, new_filename)
 
-                    # 检查目标文件是否已存在
+                    # Check whether the target file already exists
                     if os.path.exists(new_path):
-                        print(f"  警告: 目标文件已存在，跳过重命名: {filename} -> {new_filename}")
+                        print(f"  WARNING: target file already exists; skipping renaming: {filename} -> {new_filename}")
                         failed_renames += 1
                         continue
 
-                    # 执行重命名
+                    # Perform renaming
                     try:
                         os.rename(old_path, new_path)
                         total_renamed += 1
                         print(f"  {filename} -> {new_filename}")
                     except Exception as e:
-                        print(f" 重命名失败: {filename} -> {new_filename}, 错误: {e}")
+                        print(f" rename failed: {filename} -> {new_filename}, ERROR: {e}")
                         failed_renames += 1
 
-    # 输出统计信息
-    print(f"\n重命名完成！")
-    print(f"  成功重命名: {total_renamed} 个文件")
+    # Print summary statistics
+    print(f"\nrenaming completed!")
+    print(f"  successfully renamed: {total_renamed} files")
     if failed_renames > 0:
-        print(f"  失败或跳过: {failed_renames} 个文件")
+        print(f"  failed or skipped: {failed_renames} files")
 
 
 def convert_output_to_csv(work_dir="."):
     """
-    将 and_output 目录下的 final DMP 和 final DMR 文件转换为 CSV 格式（逗号分隔）
+    Convert final DMP and final DMR files under and_output to comma-separated CSV files.
 
-    参数：
-        work_dir: 工作目录
+    Parameters:
+        work_dir: working directory.
     """
 
     and_output_dir = os.path.join(work_dir, "and_output")
 
     if not os.path.exists(and_output_dir):
-        print(f"错误：目录 {and_output_dir} 不存在")
+        print(f"ERROR: directory {and_output_dir} does not exist")
         return 0
 
-    # 定义需要转换的文件模式
+    # Define file patterns to convert
     file_patterns = [
-        "*-final_significant_sites_DMPs.txt",  # final DMP 文件
-        "*-final_significant_regions_DMRs.txt"  # final DMR 文件
+        "*-final_significant_sites_DMPs.txt",  # final DMP files
+        "*-final_significant_regions_DMRs.txt"  # final DMR files
     ]
 
     converted_count = 0
     failed_count = 0
 
     for pattern in file_patterns:
-        # 搜索匹配的文件
+        # Search for matching files
         matching_files = glob.glob(os.path.join(and_output_dir, pattern))
 
         for txt_file in matching_files:
             try:
-                # 读取制表符分隔的文件
+                # Read tab-delimited file
                 df = pd.read_csv(txt_file, sep=r'\s+')
 
                 if df.empty:
-                    print(f"  跳过空文件: {os.path.basename(txt_file)}")
+                    print(f"  Skipping empty file: {os.path.basename(txt_file)}")
                     continue
 
-                # 生成 CSV 文件路径（将 .txt 替换为 .csv）
+                # Generate CSV file path by replacing .txt with .csv
                 csv_file = txt_file.replace('.txt', '.csv')
 
-                # 保存为逗号分隔的 CSV 文件
+                # Save as comma-separated CSV file
                 df.to_csv(csv_file, sep=',', index=False)
 
-                print(f"  成功转换： {os.path.basename(txt_file)} -> {os.path.basename(csv_file)}")
+                print(f"  conversion successful: {os.path.basename(txt_file)} -> {os.path.basename(csv_file)}")
                 converted_count += 1
 
             except Exception as e:
-                print(f"  转换失败: {os.path.basename(txt_file)}, 错误: {e}")
+                print(f"  conversion failed: {os.path.basename(txt_file)}, ERROR: {e}")
                 failed_count += 1
 
-    print(f"\\n转换完成！")
-    print(f"  成功转换: {converted_count} 个文件")
+    print(f"\\nconversion completed!")
+    print(f"  conversion successful: {converted_count} files")
     if failed_count > 0:
-        print(f"  转换失败: {failed_count} 个文件")
+        print(f"  conversion failed: {failed_count} files")
 
     return converted_count
 
 
 def convert_chromosome_to_names(chr_series, work_dir="."):
     """
-    将 and_output 目录下 final DMP 和 final DMR 文件中的 Chromosome 列
-    从数值转换为真实的染色体名称
+    Convert the Chromosome column in final DMP and final DMR files under and_output
+    from numeric indices to real chromosome names.
 
-    参数：
-        chr_series: 染色体映射 Series (染色体名称 -> 索引，索引从0开始)
-        work_dir: 工作目录
+    Parameters:
+        chr_series: chromosome mapping Series (chromosome name -> index, zero-based index).
+        work_dir: working directory.
 
-    返回：
-        成功转换的文件数量
+    Returns:
+        Number of files successfully converted.
     """
 
     if chr_series is None or len(chr_series) == 0:
-        print("错误：染色体映射为空，跳过转换")
+        print("ERROR:chromosome mapping is empty; skippingconversion")
         return 0
 
     and_output_dir = os.path.join(work_dir, "and_output")
 
     if not os.path.exists(and_output_dir):
-        print(f"错误：目录 {and_output_dir} 不存在")
+        print(f"ERROR: directory {and_output_dir} does not exist")
         return 0
 
-    # 创建数值到染色体名称的映射
-    # 文件中的 Chromosome 列是从1开始的数字，需要转换为 chr_series 中的染色体名称
-    # chr_series.index[0] 对应文件中的 1
+    # Create numeric-to-chromosome-name mapping
+    # The Chromosome column in files is 1-based numeric and must be converted to chromosome names in chr_series
+    # chr_series.index[0] corresponds to 1 in files
     index_to_chr = {i + 1: chr_series.index[i] for i in range(len(chr_series))}
 
-    print(f"染色体映射表: {index_to_chr}")
+    print(f"chromosome mapping table: {index_to_chr}")
 
-    # 定义需要处理的文件模式
+    # Define file patterns to process
     file_patterns = [
-        "*-final_significant_sites_DMPs.txt",  # final DMP 文件
-        "*-final_significant_regions_DMRs.txt"  # final DMR 文件
+        "*-final_significant_sites_DMPs.txt",  # final DMP files
+        "*-final_significant_regions_DMRs.txt"  # final DMR files
     ]
 
     converted_count = 0
     failed_count = 0
 
     for pattern in file_patterns:
-        # 搜索匹配的文件
+        # Search for matching files
         matching_files = glob.glob(os.path.join(and_output_dir, pattern))
 
         for file_path in matching_files:
             try:
-                # 读取文件
+                # Read file
                 df = pd.read_csv(file_path, sep=r'\s+')
 
                 if df.empty:
-                    print(f"  跳过空文件: {os.path.basename(file_path)}")
+                    print(f"  Skipping empty file: {os.path.basename(file_path)}")
                     continue
 
-                # 检查是否有 Chromosome 列
+                # Check whether the Chromosome column exists
                 if 'Chromosome' not in df.columns:
-                    print(f"  警告: {os.path.basename(file_path)} 中没有 Chromosome 列，跳过")
+                    print(f"  WARNING: {os.path.basename(file_path)} does not contain Chromosome column; skipping")
                     continue
 
-                # 保存原始的 Chromosome 列用于调试
+                # Save the original Chromosome column for debugging
                 original_chrs = df['Chromosome'].unique()
 
-                # 转换 Chromosome 列
-                # 先确保是整数类型
+                # Convert the Chromosome column
+                # Ensure integer type first
                 df['Chromosome'] = df['Chromosome'].astype(int)
 
-                # 使用映射转换为染色体名称
+                # Convert to chromosome names using the mapping
                 df['Chromosome'] = df['Chromosome'].map(index_to_chr)
 
-                # 检查是否有未成功映射的值
+                # Check whether any values were not mapped successfully
                 if df['Chromosome'].isna().any():
                     unmapped_count = df['Chromosome'].isna().sum()
-                    print(f"  警告: {os.path.basename(file_path)} 中有 {unmapped_count} 个染色体编号无法映射")
-                    # 可选：删除无法映射的行
+                    print(f"  WARNING: {os.path.basename(file_path)} contains {unmapped_count}  chromosome IDs could not be mapped")
+                    # Optional: remove rows that could not be mapped
                     df = df.dropna(subset=['Chromosome'])
 
-                # 保存回原文件（覆盖）
+                # Save back to the original file, overwriting it
                 df.to_csv(file_path, sep='\t', index=False)
 
-                print(f"    成功转换: {os.path.basename(file_path)}")
-                print(f"    原始编号: {sorted(original_chrs)}")
-                print(f"    转换后: {sorted(df['Chromosome'].unique())}")
+                print(f"    conversion successful: {os.path.basename(file_path)}")
+                print(f"    original IDs: {sorted(original_chrs)}")
+                print(f"    after conversion: {sorted(df['Chromosome'].unique())}")
                 converted_count += 1
 
             except Exception as e:
-                print(f"  ✗ 转换失败: {os.path.basename(file_path)}")
-                print(f"    错误信息: {e}")
+                print(f"  [FAIL] conversion failed: {os.path.basename(file_path)}")
+                print(f"    error message: {e}")
                 import traceback
                 traceback.print_exc()
                 failed_count += 1
 
-    # 输出统计信息
-    print(f"\n染色体编号转换完成！")
-    print(f"  成功转换: {converted_count} 个文件")
+    # Print summary statistics
+    print(f"\nchromosome ID conversion completed!")
+    print(f"  conversion successful: {converted_count} files")
     if failed_count > 0:
-        print(f"  转换失败: {failed_count} 个文件")
+        print(f"  conversion failed: {failed_count} files")
 
     return converted_count
 
@@ -7278,180 +7307,180 @@ def main():
     parser = argparse.ArgumentParser(
         description="MultiDMPcaller: pairwise Fisher tests, FDR correction, DMP/DMR calling"
     )
-    # ===== 兼容旧版位置参数：python script.py n m dir2 dir1 biotype =====
+    # ===== Backward-compatible legacy positional arguments:python script.py n m dir2 dir1 biotype =====
     parser.add_argument("n_pos", type=int, nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("m_pos", type=int, nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("dir2_pos", nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("dir1_pos", nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("biotype_pos", type=int, nargs="?", choices=[0, 1, 2], help=argparse.SUPPRESS)
 
-    # ===== 新版命名参数：python script.py --n 2 --m 2 --dir2 wt --dir1 mut --biotype 0 =====
-    parser.add_argument("--n", dest="n_opt", metavar="N", type=int, help="对照组/野生型重复数")
-    parser.add_argument("--m", dest="m_opt", metavar="M", type=int, help="实验组/突变型重复数")
-    parser.add_argument("--dir-wt", dest="dir2_opt", metavar="DIR_WT", help="对照组/野生型样本目录")
-    parser.add_argument("--dir-mut", dest="dir1_opt", metavar="DIR_MUT", help="实验组/突变型样本目录")
-    parser.add_argument("--biotype", dest="biotype_opt", metavar="BIOTYPE", type=int, choices=[0, 1, 2], help="0=动物, 1=植物, 2=不过滤")
+    # ===== New named arguments:python script.py --n 2 --m 2 --dir2 wt --dir1 mut --biotype 0 =====
+    parser.add_argument("--wt-reps", dest="n_opt", metavar="WT_REPS", type=int, help="control group / wild-type replicate count")
+    parser.add_argument("--mut-reps", dest="m_opt", metavar="MUT_REPS", type=int, help="experimental group / mutant replicate count")
+    parser.add_argument("--dir-wt", dest="dir2_opt", metavar="DIR_WT", help="control group / wild-type sample directory")
+    parser.add_argument("--dir-mut", dest="dir1_opt", metavar="DIR_MUT", help="experimental group / mutant sample directory")
+    parser.add_argument("--biotype", dest="biotype_opt", metavar="BIOTYPE", type=int, choices=[0, 1, 2], help="0=animal, 1=plant, 2=no filtering")
     parser.add_argument(
         "--meth-diff",
         type=float,
         default=0.0,
-        help="DMP最终筛选所需的最小绝对甲基化差异，范围0-1；例如0.25表示25%%。默认0.0，兼容旧行为。"
+        help="Minimum absolute methylation difference required for final DMP filtering, in the range 0-1; for example, 0.25 means 25%%. Default: 0.0 for backward compatibility."
     )
     parser.add_argument(
         "--auto-meth-diff",
         action="store_true",
-        help="启用 mianjifa auto-methdiff：在 pairwise FDR完成后，根据q显著且尚未经过MethDiff筛选的位点之raw MethDiff分布估计全局阈值；该阈值同时用于auto-vote支持构建和final common DMP。默认关闭。"
+        help="Enable mianjifa auto-methdiff. After pairwise FDR correction, estimate one global threshold from the raw MethDiff distribution of q-significant sites before MethDiff filtering. The estimated threshold is also used for auto-vote support construction and final common-DMP calling. Disabled by default."
     )
     parser.add_argument(
         "--auto-meth-diff-report-only",
         action="store_true",
-        help="仅输出 mianjifa auto-methdiff 阈值诊断表和分布图，不改变实际 DMP 判定阈值。默认关闭。"
+        help="Only output mianjifa auto-methdiff diagnostic tables and distribution plots; do not change the actual DMP calling threshold. Disabled by default."
     )
     parser.add_argument(
         "--auto-meth-diff-cut-percent",
         type=float,
         default=0.05,
-        help="mianjifa auto-methdiff 从0向两侧切除的直方图面积比例。默认0.05。"
+        help="Histogram area fraction cut outward from zero for mianjifa auto-methdiff. Default: 0.05."
     )
     parser.add_argument(
         "--auto-meth-diff-fallback",
         type=float,
         default=0.3,
-        help="mianjifa auto-methdiff 估计失败时回退使用的 methdiff 阈值。默认0.3。"
+        help="Fallback MethDiff threshold used when mianjifa auto-methdiff estimation fails. Default: 0.3."
     )
     parser.add_argument(
         "--auto-meth-diff-aggregate",
         choices=["median", "mean", "max", "min"],
         default="median",
-        help="将各比较左右阈值聚合为一个全局 abs(methdiff) 阈值的方法。默认median。"
+        help="Method for aggregating left/right thresholds across comparisons into one global abs(MethDiff) threshold. Default: median."
     )
     parser.add_argument(
         "--q-cpg",
         type=float,
         default=DMP_QVALUE_THRESHOLDS["CpG"],
-        help="CpG DMP的q-value阈值，范围0-1。默认使用原代码阈值。"
+        help="CpG DMP q-value threshold, in the range 0-1. Default: use the original code threshold."
     )
     parser.add_argument(
         "--q-chg",
         type=float,
         default=DMP_QVALUE_THRESHOLDS["CHG"],
-        help="CHG DMP的q-value阈值，范围0-1。默认使用原代码阈值。"
+        help="CHG DMP q-value threshold, in the range 0-1. Default: use the original code threshold."
     )
     parser.add_argument(
         "--q-chh",
         type=float,
         default=DMP_QVALUE_THRESHOLDS["CHH"],
-        help="CHH DMP的q-value阈值，范围0-1。默认使用原代码阈值。"
+        help="CHH DMP q-value threshold, in the range 0-1. Default: use the original code threshold."
     )
     parser.add_argument(
         "--dmr-q",
         type=float,
         default=DMR_QVALUE_THRESHOLD,
-        help="DMR的q-value阈值，范围0-1。默认使用原代码阈值。"
+        help="DMR q-value threshold, in the range 0-1. Default: use the original code threshold."
     )
     parser.add_argument(
         "--auto-qvalue-twostep",
         action="store_true",
-        help="仅对两步法context自动估计DMP q-value阈值：在p值预筛选子集内寻找max(qvalue-pvalue)点，并用该点qvalue作为该pair/context阈值。默认关闭。"
+        help="Estimate the DMP q-value threshold only for two-step-FDR contexts: within the p-value-prefiltered subset, find the maximum qvalue-pvalue point and use its q-value as the pair/context threshold. Disabled by default."
     )
     parser.add_argument(
         "--auto-qvalue-report-only",
         action="store_true",
-        help="仅输出两步法自动q-value阈值诊断表，不改变DMP判定阈值。默认关闭。"
+        help="Only output the two-step auto q-value threshold diagnostic table; do not change the DMP calling threshold. Disabled by default."
     )
     parser.add_argument(
         "--auto-qvalue-p-cutoff",
         type=float,
         default=AUTO_QVALUE_P_CUTOFF,
-        help="两步法自动q-value阈值估计使用的p-value候选上限，默认0.05。"
+        help="P-value candidate upper limit used for two-step auto q-value threshold estimation. Default: 0.05."
     )
     parser.add_argument(
         "--auto-qvalue-min-candidates",
         type=int,
         default=AUTO_QVALUE_MIN_CANDIDATES,
-        help="估计自动q-value阈值所需的最少候选位点数；不足时回退到固定q阈值。默认10。"
+        help="Minimum number of candidate sites required for auto q-value threshold estimation; fall back to the fixed q-threshold if the number is insufficient. Default: 10."
     )
     parser.add_argument(
         "--auto-qvalue-use-smooth",
         action="store_true",
-        help="使用平滑后的(qvalue-pvalue)曲线寻找最大差值点。默认关闭；建议正式分析使用默认raw diff。"
+        help="Use the smoothed (qvalue-pvalue) curve to find the maximum-difference point. Disabled by default; for formal analysis, keeping the default raw-difference setting is recommended."
     )
     parser.add_argument(
         "--auto-qvalue-smooth-sigma",
         type=float,
         default=AUTO_QVALUE_SMOOTH_SIGMA,
-        help="--auto-qvalue-use-smooth 启用时的Gaussian sigma。默认4。"
+        help="Gaussian sigma used when --auto-qvalue-use-smooth is enabled. Default: 4."
     )
     parser.add_argument(
         "--vote-threshold",
         type=float,
         default=VOTE_THRESHOLD,
-        help="最终DMP/DMR跨replicate组合投票阈值，范围(0,1]；默认0.6667，即原代码2/3规则。"
+        help="Final DMP/DMR voting threshold across replicate combinations, in the range (0,1]. Default: 0.6667, i.e. the original 2/3 rule."
     )
     parser.add_argument(
         "--auto-dmp-vote-threshold",
         action="store_true",
-        help="自动估计 final DMP 的整数投票 required_count。默认关闭。"
+        help="Automatically estimate the integer required_count for final DMP voting. Disabled by default."
     )
     parser.add_argument(
         "--auto-dmr-vote-threshold",
         action="store_true",
-        help="自动估计 final DMR 的整数投票 required_count。默认关闭。"
+        help="Automatically estimate the integer required_count for final DMR voting. Disabled by default."
     )
     parser.add_argument(
         "--auto-vote-threshold-report-only",
         action="store_true",
-        help="仅计算并输出自动投票阈值和分布图，不改变 final DMP/DMR 判定。默认关闭。"
+        help="Only calculate and output auto vote thresholds and distribution plots; do not change final DMP/DMR calling. Disabled by default."
     )
     parser.add_argument(
         "--dmp-lowdiff-strict-vote",
         action="store_true",
-        help="启用 final DMP 低差异严格投票后处理：先按正常q-value+投票得到provisional DMP；若boundary abs(MethDiff)<=cutoff，则要求更高投票数。默认关闭，保持旧行为。"
+        help="Enable final-DMP low-difference strict-vote post-processing: first obtain provisional DMPs using the normal q-value + voting rule; if boundary abs(MethDiff) <= cutoff, require a higher vote count. Disabled by default to preserve legacy behavior."
     )
     parser.add_argument(
         "--dmp-lowdiff-cutoff",
         type=float,
         default=DMP_LOWDIFF_CUTOFF,
-        help="final DMP lowdiff strict vote 的 boundary abs(MethDiff) cutoff。默认0.3。"
+        help="Boundary abs(MethDiff) cutoff for final-DMP lowdiff strict voting. Default: 0.3."
     )
     parser.add_argument(
         "--dmp-lowdiff-strict-vote-report-only",
         action="store_true",
-        help="仅输出 final DMP lowdiff strict vote 诊断表和summary，不改变最终DMP文件。默认关闭。"
+        help="Only output the final-DMP lowdiff strict-vote diagnostic table and summary; do not change the final DMP file. Disabled by default."
     )
     parser.add_argument(
         "--skip-dmr",
         action="store_true",
-        help="跳过所有 DMR 相关步骤，仅输出 DMP/final DMP 结果。默认关闭，兼容原行为。"
+        help="Skip all DMR-related steps and only output DMP/final-DMP results. Disabled by default for backward compatibility."
     )
     parser.add_argument(
         "--skip-window",
         action="store_true",
-        help="跳过所有滑动窗口和可视化绘图步骤，仅输出表格结果。默认关闭，兼容原行为。"
+        help="Skip all sliding-window and visualization plotting steps; only output table results. Disabled by default for backward compatibility."
     )
     parser.add_argument(
         "--dmr-engine",
         choices=["python", "cpp"],
         default="python",
-        help="DMR候选区域识别引擎：python=原始Python实现；cpp=使用dmr_step1 + dmr_step2_dynamic。默认python，便于验证兼容性。"
+        help="DMR candidate-region detection engine: python=original Python implementation; cpp=use dmr_step1 + dmr_step2_dynamic. Default: python, to facilitate compatibility validation."
     )
     parser.add_argument(
         "--threads",
         type=int,
         default=1,
-        help="并行 worker 进程数。默认1为全流程串行；threads>1 时自动并行所有安全阶段，包括 newtoboth 文件转换、replicate-pair 处理和 common DMR 汇总。建议小数据2-4，大数据根据内存/I/O谨慎设置。"
+        help="Number of parallel worker processes. Default: 1, which means the full workflow is serial. When threads > 1, all safe stages are parallelized automatically, including newtoboth file conversion, replicate-pair processing, and common DMR aggregation. Recommended: 2-4 for small datasets; adjust carefully according to memory and I/O for large datasets."
     )
     args = parser.parse_args()
 
     def choose_arg(opt_value, pos_value, name):
-        """同时兼容新版 --xxx 参数和旧版位置参数。"""
+        """Support both new --xxx arguments and legacy positional arguments."""
         if opt_value is not None and pos_value is not None and opt_value != pos_value:
-            parser.error(f"参数冲突：--{name}={opt_value} 与旧版位置参数 {pos_value} 不一致")
+            parser.error(f"parameter conflict:--{name}={opt_value} with the legacy positional argument {pos_value} inconsistent")
         if opt_value is not None:
             return opt_value
         if pos_value is not None:
             return pos_value
-        parser.error(f"缺少必要参数：--{name}")
+        parser.error(f"missing required parameter:--{name}")
 
     args.n = choose_arg(args.n_opt, args.n_pos, "n")
     args.m = choose_arg(args.m_opt, args.m_pos, "m")
@@ -7478,25 +7507,25 @@ def main():
     }
     for name, value in numeric_thresholds.items():
         if not 0 <= value <= 1:
-            print(f"错误：{name} 必须在 0 到 1 之间，例如 0.25 表示 25%")
+            print(f"ERROR: {name} must be in 0 to 1 range, for example 0.25 means 25%")
             sys.exit(1)
     if not 0 < args.vote_threshold <= 1:
-        print("错误：--vote-threshold 必须在 (0, 1] 之间，例如 0.667 表示2/3多数投票")
+        print("ERROR: --vote-threshold must be in (0, 1] range, for example 0.667 means 2/3majority voting")
         sys.exit(1)
     if not 0 < args.auto_meth_diff_cut_percent < 1:
-        print("错误：--auto-meth-diff-cut-percent 必须在 (0, 1) 之间，例如0.05")
+        print("ERROR: --auto-meth-diff-cut-percent must be in (0, 1) range, for example 0.05")
         sys.exit(1)
     if args.threads < 1:
-        print("错误：--threads 必须是 >= 1 的整数")
+        print("ERROR: --threads must be >= 1 integer")
         sys.exit(1)
     if args.auto_qvalue_min_candidates < 1:
-        print("错误：--auto-qvalue-min-candidates 必须是 >= 1 的整数")
+        print("ERROR: --auto-qvalue-min-candidates must be >= 1 integer")
         sys.exit(1)
     if args.auto_qvalue_smooth_sigma <= 0:
-        print("错误：--auto-qvalue-smooth-sigma 必须大于0")
+        print("ERROR: --auto-qvalue-smooth-sigma must be greater than 0")
         sys.exit(1)
 
-    # 将命令行参数写回全局阈值配置，保持原有 get_dmp_threshold() 调用链不变
+    # Write command-line parameters back to global threshold configuration to preserve the existing get_dmp_threshold() call chain
     DMP_QVALUE_THRESHOLDS["CpG"] = args.q_cpg
     DMP_QVALUE_THRESHOLDS["CHG"] = args.q_chg
     DMP_QVALUE_THRESHOLDS["CHH"] = args.q_chh
@@ -7516,69 +7545,69 @@ def main():
     DMP_LOWDIFF_CUTOFF = args.dmp_lowdiff_cutoff
     DMP_LOWDIFF_STRICT_VOTE_REPORT_ONLY = args.dmp_lowdiff_strict_vote_report_only
 
-    # 验证目录存在，且确保组数合法
+    # Validate directory existence and ensure replicate counts are valid
     if not os.path.exists(dir1):
-        print(f"错误：目录 '{dir1}' 不存在！")
+        print(f"ERROR: directory '{dir1}' does not exist.")
         sys.exit(1)
     if not os.path.exists(dir2):
-        print(f"错误：目录 '{dir2}' 不存在！")
+        print(f"ERROR: directory '{dir2}' does not exist.")
         sys.exit(1)
     if m <= 0 or n <= 0:
-        print("错误：组数必须大于0")
+        print("ERROR:the number of groups must be greater than 0")
         sys.exit(1)
 
-    print(f"\n参数确认:")
-    print(f"突变型目录: {dir1} (包含 {m} 组文件)")
-    print(f"野生型目录: {dir2} (包含 {n} 组文件)")
-    print(f"DMP甲基化差异阈值: {meth_diff_threshold} ({meth_diff_threshold * 100:.1f}%)")
+    print(f"\nParameter confirmation:")
+    print(f"mutant directory: {dir1} (containing {m} replicate files)")
+    print(f"wild-type directory: {dir2} (containing {n} replicate files)")
+    print(f"DMP methylation-difference threshold: {meth_diff_threshold} ({meth_diff_threshold * 100:.1f}%)")
     print(
         "mianjifa auto-methdiff: "
-        f"启用判定={args.auto_meth_diff}, "
-        f"仅报告={args.auto_meth_diff_report_only}, "
+        f"enabled for calling={args.auto_meth_diff}, "
+        f"report-only={args.auto_meth_diff_report_only}, "
         f"cut_percent={args.auto_meth_diff_cut_percent}, "
         f"aggregate={args.auto_meth_diff_aggregate}, "
         f"fallback={args.auto_meth_diff_fallback}"
     )
     print(
-        "DMP q-value阈值: "
+        "DMP q-value threshold: "
         f"CpG={DMP_QVALUE_THRESHOLDS['CpG']}, "
         f"CHG={DMP_QVALUE_THRESHOLDS['CHG']}, "
         f"CHH={DMP_QVALUE_THRESHOLDS['CHH']}"
     )
-    print(f"DMR q-value阈值: {DMR_QVALUE_THRESHOLD}")
+    print(f"DMR q-value threshold: {DMR_QVALUE_THRESHOLD}")
     print(
-        "两步法自动q-value阈值: "
-        f"启用判定={AUTO_QVALUE_TWOSTEP}, "
-        f"仅报告={AUTO_QVALUE_REPORT_ONLY}, "
+        "two-step auto q-value threshold: "
+        f"enabled for calling={AUTO_QVALUE_TWOSTEP}, "
+        f"report-only={AUTO_QVALUE_REPORT_ONLY}, "
         f"p_cutoff={AUTO_QVALUE_P_CUTOFF}, "
         f"min_candidates={AUTO_QVALUE_MIN_CANDIDATES}, "
         f"use_smooth={AUTO_QVALUE_USE_SMOOTH}"
     )
-    print(f"最终DMP/DMR投票阈值: {VOTE_THRESHOLD} ({VOTE_THRESHOLD * 100:.1f}%)")
+    print(f"final DMP/DMR vote threshold: {VOTE_THRESHOLD} ({VOTE_THRESHOLD * 100:.1f}%)")
     print(
-        "自动投票阈值: "
+        "auto vote threshold: "
         f"DMP={AUTO_DMP_VOTE_THRESHOLD}, "
         f"DMR={AUTO_DMR_VOTE_THRESHOLD}, "
         f"report_only={AUTO_VOTE_THRESHOLD_REPORT_ONLY}"
     )
     print(
-        "DMP lowdiff strict vote后处理: "
-        f"启用判定={DMP_LOWDIFF_STRICT_VOTE}, "
-        f"仅报告={DMP_LOWDIFF_STRICT_VOTE_REPORT_ONLY}, "
+        "DMP lowdiff strict-vote post-processing: "
+        f"enabled for calling={DMP_LOWDIFF_STRICT_VOTE}, "
+        f"report-only={DMP_LOWDIFF_STRICT_VOTE_REPORT_ONLY}, "
         f"cutoff={DMP_LOWDIFF_CUTOFF}"
     )
     if (DMP_LOWDIFF_STRICT_VOTE or DMP_LOWDIFF_STRICT_VOTE_REPORT_ONLY) and meth_diff_threshold > 0:
         print(
-            "提示：--dmp-lowdiff-strict-vote 是 final DMP 后处理；"
-            f"当前 --meth-diff={meth_diff_threshold:.6g} 会先在pair支持层过滤，"
-            "lowdiff strict vote 将在该结果基础上继续应用。"
+            "Note: --dmp-lowdiff-strict-vote is final DMP post-processing;"
+            f"current --meth-diff={meth_diff_threshold:.6g} will first filter at the pair-support layer,"
+            "lowdiff strict vote will then be applied on top of those results."
         )
-    print(f"是否跳过DMR分析: {args.skip_dmr}")
-    print(f"是否跳过滑动窗口/绘图: {args.skip_window}")
-    print(f"并行 worker 进程数: {args.threads}")
+    print(f"skip DMR analysis: {args.skip_dmr}")
+    print(f"skip sliding-window/plotting: {args.skip_window}")
+    print(f"parallel worker process count: {args.threads}")
 
-    print("\n第一阶段：newtoboth进行中")
-    # 将bismark新格式数据转换为both格式
+    print("\nStage 1: running newtoboth")
+    # Convert Bismark new-format data to both format
     chr_series = newtoboth(m, n, dir1, dir2, threads=args.threads, work_dir=".")
     if biotype == 0:
         unfilter_mtypes = ["CHH", "CHG"]
@@ -7587,19 +7616,19 @@ def main():
     elif biotype == 2:
         unfilter_mtypes = ["CHH", "CHG", "CpG"]
     else:
-        print("错误：生物类型必须是0、1或2")
+        print("ERROR: biotype must be 0, 1, or 2")
         sys.exit(1)
-    print(f"不需要p值预过滤的甲基化类型: {unfilter_mtypes}")
+    print(f"methylation contexts not requiring p-value prefiltering: {unfilter_mtypes}")
     success = process_all_combinations(
         dir1, dir2, m, n, unfilter_mtypes,
         meth_diff_threshold=meth_diff_threshold,
         skip_dmr=args.skip_dmr,
         skip_window=args.skip_window,
         threads=args.threads
-    )  # process_all_combinations是进行m*n*3次检验
+    )  # process_all_combinations performs m*n*3 tests
 
-    if success:  # 全部检验都成功
-        print("\n所有检验和FDR校正均成功完成！")
+    if success:  # All tests succeeded
+        print("\nAll tests and FDR corrections completed successfully!")
 
         if AUTO_QVALUE_TWOSTEP or AUTO_QVALUE_REPORT_ONLY:
             plot_all_auto_qvalue_panels(
@@ -7611,9 +7640,9 @@ def main():
 
         if args.auto_meth_diff or args.auto_meth_diff_report_only:
             print(
-                "\n提示：mianjifa auto-methdiff 读取完整pairwise FDR表中的q显著位点，"
-                "不使用预先经过MethDiff过滤的DMP文件；估计出的阈值将继续用于"
-                "auto-vote支持构建和final common DMP。"
+                "\nNote:mianjifa auto-methdiff reads q-significant sites from the complete pairwise FDR tables,"
+                "does not use previouslyMethDiff-filtered DMP files; the estimated threshold will continue to be used for "
+                "auto-vote support construction and final common-DMP calling."
             )
             auto_methdiff_threshold, auto_methdiff_summary = estimate_mianjifa_auto_methdiff_threshold(
                 mut_dir=dir1,
@@ -7628,8 +7657,8 @@ def main():
             if args.auto_meth_diff and not args.auto_meth_diff_report_only:
                 meth_diff_threshold = auto_methdiff_threshold
                 print(
-                    "启用 mianjifa auto-methdiff：auto-vote与final common DMP "
-                    f"统一使用 methdiff 阈值 = {meth_diff_threshold:.6g}"
+                    "Enable mianjifa auto-methdiff: auto-vote and final common DMP "
+                    f"uniformly using methdiff threshold = {meth_diff_threshold:.6g}"
                 )
                 regenerate_pair_dmp_outputs_from_fdr(
                     m=m,
@@ -7642,8 +7671,8 @@ def main():
                 )
             else:
                 print(
-                    f"mianjifa auto-methdiff report-only：估计阈值 = {auto_methdiff_threshold:.6g}；"
-                    f"实际仍使用 --meth-diff = {meth_diff_threshold:.6g}"
+                    f"mianjifa auto-methdiff report-only:estimated threshold = {auto_methdiff_threshold:.6g};"
+                    f"actually still using --meth-diff = {meth_diff_threshold:.6g}"
                 )
 
         methylation_types = ['CpG', 'CHH', 'CHG']
@@ -7655,25 +7684,25 @@ def main():
         for mtype in methylation_types:
             common_sites_df = find_common_significant_sites(methytype2=mtype, dir1=dir1, dir2=dir2, meth_diff_threshold=meth_diff_threshold)
             if common_sites_df is not None and not common_sites_df.empty:
-                print(f"找到 {len(common_sites_df)} 个 {mtype} 类型的共同显著位点")
+                print(f"Found {len(common_sites_df)}  {mtype} common significant sites")
 
-                # 进行滑动窗口分析
+                # Perform sliding-window analysis
                 if args.skip_window:
-                    print(f"跳过 {mtype} 共同显著位点滑动窗口分析 (--skip-window)")
+                    print(f"skipping {mtype} common significant site sliding-window analysis (--skip-window)")
                 else:
-                    print(f"开始对 {mtype} 共同显著位点进行滑动窗口分析...")
+                    print(f"Starting {mtype} common significant sites for sliding-window analysis...")
                     results = process_common_sites_sliding_window(
                         common_sites_df=common_sites_df,
                         methytype=mtype
                     )
-                    print(f"完成 {mtype} 类型的滑动窗口分析")
+                    print(f"Completed {mtype} context sliding-window analysis")
             else:
-                print(f"未找到 {mtype} 类型的共同显著位点")
+                print(f"No {mtype} common significant sites")
 
         if args.skip_dmr:
-            print("跳过最终 common DMR 分析流程 (--skip-dmr)")
+            print("Skipping final common DMR analysis workflow (--skip-dmr)")
         else:
-            print("开始 DMR 分析流程")
+            print("Starting the DMR analysis workflow")
             process_common_sites_dmr_and_summarize(
                 dir1=dir1,
                 dir2=dir2,
@@ -7683,9 +7712,9 @@ def main():
                 threads=args.threads,
             )
 
-        # 生成所有滑动窗口的可视化图表
+        # Generate visualizations for all sliding-window results
         if args.skip_window:
-            print("跳过所有滑动窗口可视化绘图 (--skip-window)")
+            print("skip all sliding-window visualization plotting (--skip-window)")
         else:
             plot_methylation_sliding_windows(chr_series=chr_series)
             for mtype111 in ["CpG", "CHH", "CHG"]:
@@ -7693,14 +7722,14 @@ def main():
         convert_chromosome_to_names(chr_series=chr_series, work_dir=".")
         rename_chromosome_files(chr_series=chr_series, work_dir=".")
         convert_output_to_csv(work_dir=".")
-        print(f"- DMP 结果：output_x_y/甲基化类型/")
-        print(f"- 共同显著位点：and_output/")
-        print(f"- 最终显著 DMR：and_output/*-final_significant_regions_DMRs.txt")
+        print(f"- DMP results: output_x_y/<methylation_context>/")
+        print(f"- common significant sites: and_output/")
+        print(f"- final significant DMR: and_output/*-final_significant_regions_DMRs.txt")
     else:
-        print("\n部分检验失败，请检查输出信息。")
+        print("\nSome tests failed,please check the output messages.")
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print(f"总耗时: {elapsed_time:.2f} 秒")
+    print(f"total elapsed time: {elapsed_time:.2f} seconds")
 
 
 if __name__ == "__main__":
