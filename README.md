@@ -2,19 +2,6 @@
 
 MultiDMPcaller is a one-stop DNA methylation analysis tool for detecting and visualizing **differentially methylated positions (DMPs)** and **differentially methylated regions (DMRs)** between two biological groups, such as a control/wild-type group and an experimental/mutant group. It supports the three major cytosine methylation contexts, **CpG**, **CHG**, and **CHH**, and performs replicate-aware analysis through all pairwise comparisons between the two groups.
 
-The current version supports:
-
-- DMP and DMR calling for CpG, CHG, and CHH contexts.
-- m × n pairwise comparisons between control and experimental replicates.
-- Fisher's exact test and q-value based significance filtering.
-- Majority-vote based final DMP and DMR calling across replicate combinations.
-- Optional adaptive two-step q-value thresholding.
-- Optional automatic DMP/DMR voting-threshold estimation.
-- Optional low-difference strict-vote post-filtering for final DMPs.
-- Optional C++ accelerated DMR candidate-region generation.
-- Chromosome-level visualization of DMP/DMR distributions.
-- Local command-line execution and optional web-server deployment.
-
 ---
 
 ## 1. Installation
@@ -359,8 +346,4 @@ If you use MultiDMPcaller, please cite:
 Yuan Q#., Zhao H#., Zhang Z#., Yue C., Zhang B., Zou Q. and Yu J*. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (under review).
 ```
 
----
 
-## 11. Contact
-
-For questions, bug reports, or feature requests, please open an issue on GitHub or contact the corresponding author listed in the paper.
