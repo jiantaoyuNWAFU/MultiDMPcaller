@@ -113,8 +113,8 @@ The recommended interface uses named arguments:
 
 ```bash
 python MultiDMPcaller.py \
-  --n 2 \
-  --m 2 \
+  --wt-reps 2 \
+  --mut-reps 2 \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1
@@ -124,8 +124,8 @@ Required arguments:
 
 | Argument | Meaning |
 | :--- | :--- |
-| `--n` | Number of control/wild-type replicates. |
-| `--m` | Number of experimental/mutant replicates. |
+| `--wt-reps` | Number of control/wild-type replicates. |
+| `--mut-reps` | Number of experimental/mutant replicates. |
 | `--dir-wt` | Directory containing the control/wild-type sample files. |
 | `--dir-mut` | Directory containing the experimental/mutant sample files. |
 | `--biotype` | Organism/data mode. `0`: animal; `1`: plant; `2`: no p-value prefiltering for all contexts. |
@@ -142,8 +142,8 @@ For a small 1 vs 1 test dataset:
 
 ```bash
 python MultiDMPcaller.py \
-  --n 1 \
-  --m 1 \
+  --wt-reps 1 \
+  --mut-reps 1 \
   --dir-wt test_data/wt \
   --dir-mut test_data/mut \
   --biotype 1
@@ -155,8 +155,8 @@ For a 2 vs 2 plant dataset:
 
 ```bash
 python MultiDMPcaller.py \
-  --n 2 \
-  --m 2 \
+  --wt-reps 2 \
+  --mut-reps 2 \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
@@ -173,8 +173,8 @@ For a 2 vs 2 animal dataset:
 
 ```bash
 python MultiDMPcaller.py \
-  --n 2 \
-  --m 2 \
+  --wt-reps 2 \
+  --mut-reps 2 \
   --dir-wt liver \
   --dir-mut brain \
   --biotype 0 \
@@ -191,8 +191,8 @@ To skip DMR calling and only generate DMP outputs:
 
 ```bash
 python MultiDMPcaller.py \
-  --n 2 \
-  --m 2 \
+  --wt-reps 2 \
+  --mut-reps 2 \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
@@ -205,8 +205,8 @@ To skip sliding-window visualization and only generate table outputs:
 
 ```bash
 python MultiDMPcaller.py \
-  --n 2 \
-  --m 2 \
+  --wt-reps 2 \
+  --mut-reps 2 \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
@@ -329,7 +329,7 @@ The web interface supports file upload, parameter selection, job submission, job
 
 ## 9. Notes and recommendations
 
-1. Make sure the number of replicate files matches `--n` and `--m`.
+1. Make sure the number of replicate files matches `--wt-reps` and `--mut-reps`.
 2. Make sure the directory names match the file suffixes. For example, files inside `wt/` should be named `1-wt.txt`, `2-wt.txt`, etc.
 3. For plant WGBS data, use `--biotype 1`; for animal WGBS data, use `--biotype 0`.
 4. For large datasets, use `--threads 2` to `--threads 4` first. Increasing threads may increase memory and I/O pressure.
@@ -345,5 +345,4 @@ If you use MultiDMPcaller, please cite:
 ```text
 Yuan Q#., Zhao H#., Zhang Z#., Yue C., Zhang B., Zou Q. and Yu J*. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (under review).
 ```
-
 
