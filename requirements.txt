@@ -1,4 +1,3 @@
-# Core dependencies for local command-line MultiDMPcaller analysis
 numpy>=1.23
 pandas>=1.5
 scipy>=1.10
