@@ -174,7 +174,7 @@ python MultiDMPcaller.py \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
   --auto-dmr-vote-threshold \
-  --dmp-lowdiff-strict-vote-report-only
+  --dmp-lowdiff-strict-vote
 ```
 
 ### 4.3 Standard animal WGBS analysis
@@ -193,7 +193,7 @@ python MultiDMPcaller.py \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
   --auto-dmr-vote-threshold \
-  --dmp-lowdiff-strict-vote-report-only
+  --dmp-lowdiff-strict-vote
 ```
 
 ### 4.4 DMP-only analysis
@@ -243,10 +243,8 @@ python MultiDMPcaller.py \
 | Argument | Meaning |
 | :--- | :--- |
 | `--auto-qvalue-twostep` | Enable adaptive q-value threshold estimation for two-step FDR contexts. |
-| `--auto-qvalue-report-only` | Generate diagnostic tables for adaptive q-value estimation without changing final calling thresholds. |
 | `--auto-dmp-vote-threshold` | Automatically estimate the final DMP voting requirement across replicate comparisons. |
 | `--auto-dmr-vote-threshold` | Automatically estimate the final DMR voting requirement across replicate comparisons. |
-| `--auto-vote-threshold-report-only` | Report auto-estimated voting thresholds without applying them to final DMP/DMR calling. |
 
 ### 5.3 Low-difference strict voting
 
@@ -254,7 +252,6 @@ python MultiDMPcaller.py \
 | :--- | :--- |
 | `--dmp-lowdiff-strict-vote` | Enable stricter final-DMP voting for low-difference candidates. |
 | `--dmp-lowdiff-cutoff` | Boundary absolute MethDiff cutoff used to define low-difference final DMP candidates. Default: `0.3`. |
-| `--dmp-lowdiff-strict-vote-report-only` | Generate diagnostic output for low-difference strict voting without changing the final DMP file. |
 
 ### 5.4 Runtime and workflow control
 

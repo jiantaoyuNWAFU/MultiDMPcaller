@@ -118,7 +118,7 @@ The C++ executable files do not have executable permission.
 
 #### Solution
 
-Run:
+On Linux or macOS, run:
 
 ```bash
 chmod +x dmr_step1 dmr_step2_dynamic
@@ -448,7 +448,7 @@ Rerun using:
 --biotype 1
 ```
 
-### 4.5 Auto-threshold options changed the final output unexpectedly
+### 4.5 Threshold-estimation options changed the final output unexpectedly
 
 #### Possible cause
 
@@ -456,15 +456,15 @@ Options such as `--auto-qvalue-twostep`, `--auto-dmp-vote-threshold`, and `--aut
 
 #### Solution
 
-For diagnostic-only runs, use report-only options:
+For formal analysis, record whether these options were enabled. If you need fully fixed thresholds, omit automatic threshold-estimation options and explicitly specify:
 
 ```bash
---auto-qvalue-report-only
---auto-vote-threshold-report-only
---dmp-lowdiff-strict-vote-report-only
+--q-cpg 0.05
+--q-chg 0.04
+--q-chh 0.045
+--dmr-q 0.05
+--vote-threshold 0.6666666666666666
 ```
-
-These options help inspect estimated thresholds without applying them to final outputs.
 
 ## 5. Runtime and memory problems
 

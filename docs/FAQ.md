@@ -54,7 +54,7 @@ In general:
 
 - Use `--biotype 0` for animal WGBS data.
 - Use `--biotype 1` for plant WGBS data.
-- Use `--biotype 2` when you want no p-value prefiltering for all contexts.
+- Use `--biotype 2` when no p-value prefiltering is desired for all contexts.
 
 ## Input format
 
@@ -299,11 +299,7 @@ corresponds to an approximately two-thirds majority rule.
 
 `--auto-qvalue-twostep` enables adaptive q-value threshold estimation for two-step FDR contexts.
 
-If you want to generate diagnostic tables without changing final calling thresholds, use:
-
-```bash
---auto-qvalue-report-only
-```
+This option is intended to make q-value threshold selection more data-adaptive in applicable contexts.
 
 ### Q21. What do `--auto-dmp-vote-threshold` and `--auto-dmr-vote-threshold` do?
 
@@ -312,12 +308,6 @@ These options automatically estimate final voting requirements across replicate 
 ```text
 --auto-dmp-vote-threshold    Automatically estimate the final DMP voting requirement.
 --auto-dmr-vote-threshold    Automatically estimate the final DMR voting requirement.
-```
-
-If you want to report auto-estimated thresholds without applying them to final calling, use:
-
-```bash
---auto-vote-threshold-report-only
 ```
 
 ### Q22. What is low-difference strict voting?
@@ -329,16 +319,13 @@ Relevant parameters:
 ```text
 --dmp-lowdiff-strict-vote
 --dmp-lowdiff-cutoff
---dmp-lowdiff-strict-vote-report-only
 ```
 
-For diagnostic purposes, you can first use:
+The cutoff defines the boundary absolute MethDiff used to identify low-difference candidates. For example:
 
 ```bash
---dmp-lowdiff-strict-vote-report-only
+--dmp-lowdiff-cutoff 0.3
 ```
-
-to inspect the effect without changing the final DMP file.
 
 ### Q23. When should I use `--dmr-engine cpp`?
 
@@ -351,7 +338,7 @@ dmr_step1
 dmr_step2_dynamic
 ```
 
-and make them executable:
+On Linux or macOS, make them executable:
 
 ```bash
 chmod +x dmr_step1 dmr_step2_dynamic
