@@ -43,6 +43,15 @@ The Python DMR engine remains available and is the default for compatibility.
 
 ---
 
+## Documentation
+
+- [Input format guide](docs/Input_format.md)
+- [Parameter guide](docs/Parameter_guide.md)
+- [Troubleshooting guide](docs/Troubleshooting.md)
+- [Frequently asked questions (FAQ)](docs/FAQ.md)
+
+---
+
 ## 2. Input data format
 
 ### 2.1 Directory structure
