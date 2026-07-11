@@ -1,52 +1,28 @@
 # Parameter Guide
 
-This page explains the main command-line parameters of **MultiDMPcaller** and provides practical recommendations for common use cases.
+This page explains the main command-line parameters of **MultiDMPcaller** and provides practical recommendations for common workflows.
 
 ## 1. Required parameters
 
 ### `--wt-reps`
 
-Number of control/wild-type replicates.
-
-Example:
+Number of control/wild-type biological replicates.
 
 ```bash
 --wt-reps 2
 ```
 
-This means the control/wild-type directory should contain:
-
-```text
-1-wt.txt
-2-wt.txt
-```
-
-if the directory is named `wt`.
-
 ### `--mut-reps`
 
-Number of experimental/mutant replicates.
-
-Example:
+Number of experimental/mutant biological replicates.
 
 ```bash
 --mut-reps 2
 ```
 
-This means the experimental/mutant directory should contain:
-
-```text
-1-mut.txt
-2-mut.txt
-```
-
-if the directory is named `mut`.
-
 ### `--dir-wt`
 
-Directory containing the control/wild-type replicate files.
-
-Example:
+Directory containing the control/wild-type files.
 
 ```bash
 --dir-wt wt
@@ -54,9 +30,7 @@ Example:
 
 ### `--dir-mut`
 
-Directory containing the experimental/mutant replicate files.
-
-Example:
+Directory containing the experimental/mutant files.
 
 ```bash
 --dir-mut mut
@@ -64,25 +38,23 @@ Example:
 
 ### `--biotype`
 
-Organism/data mode.
+Organism/data mode:
 
 ```text
 0 = animal
 1 = plant
-2 = no p-value prefiltering for all contexts
+2 = no p-value prefiltering for any context
 ```
 
-Recommended use:
-
 | Data type | Recommended setting |
-|---|---|
+| :--- | :--- |
 | Animal WGBS data | `--biotype 0` |
 | Plant WGBS data | `--biotype 1` |
-| Generic/no p-value prefiltering mode | `--biotype 2` |
+| Generic mode without p-value prefiltering | `--biotype 2` |
 
 ## 2. Basic examples
 
-### 2.1 Plant WGBS example
+### 2.1 Plant WGBS
 
 ```bash
 python MultiDMPcaller.py \
@@ -93,7 +65,7 @@ python MultiDMPcaller.py \
   --biotype 1
 ```
 
-### 2.2 Animal WGBS example
+### 2.2 Animal WGBS
 
 ```bash
 python MultiDMPcaller.py \
@@ -104,7 +76,7 @@ python MultiDMPcaller.py \
   --biotype 0
 ```
 
-### 2.3 DMP-only example
+### 2.3 DMP-only analysis
 
 ```bash
 python MultiDMPcaller.py \
@@ -116,7 +88,7 @@ python MultiDMPcaller.py \
   --skip-dmr
 ```
 
-### 2.4 Table-only example without visualization
+### 2.4 Table-only analysis
 
 ```bash
 python MultiDMPcaller.py \
@@ -132,9 +104,7 @@ python MultiDMPcaller.py \
 
 ### `--q-cpg`
 
-DMP q-value threshold for CpG sites.
-
-Default:
+Fixed DMP q-value threshold for CpG sites.
 
 ```bash
 --q-cpg 0.05
@@ -142,9 +112,7 @@ Default:
 
 ### `--q-chg`
 
-DMP q-value threshold for CHG sites.
-
-Default:
+Fixed DMP q-value threshold for CHG sites.
 
 ```bash
 --q-chg 0.04
@@ -152,9 +120,7 @@ Default:
 
 ### `--q-chh`
 
-DMP q-value threshold for CHH sites.
-
-Default:
+Fixed DMP q-value threshold for CHH sites.
 
 ```bash
 --q-chh 0.045
@@ -162,119 +128,118 @@ Default:
 
 ### `--dmr-q`
 
-DMR q-value threshold.
-
-Default:
+Q-value threshold for each pairwise DMR comparison.
 
 ```bash
 --dmr-q 0.05
 ```
 
-### Practical notes
+Values must be between `0` and `1`. More stringent values generally reduce the number of retained candidates.
 
-More stringent q-value thresholds reduce the number of detected DMPs/DMRs and may increase precision, but they can also reduce recall.
+## 4. Methylation-difference thresholds
 
-More permissive q-value thresholds may detect more candidates, but they can also increase false positives.
+### `--methy-diff-dmp`
 
-## 4. Methylation-difference threshold
-
-### `--meth-diff`
-
-Optional hard absolute methylation-difference filter for final DMP calling.
+Minimum absolute site-level methylation difference required for a pairwise comparison to contribute DMP support.
 
 Default:
 
 ```bash
---meth-diff 0.0
+--methy-diff-dmp 0.0
 ```
 
 Example:
 
 ```bash
---meth-diff 0.2
+--methy-diff-dmp 0.2
 ```
 
-This means that a candidate DMP must have an absolute methylation-level difference of at least 0.2, corresponding to 20 percentage points.
+A value of `0.2` means 20 percentage points.
 
-### Practical notes
+This filter is applied at the pairwise-support layer before final DMP voting.
 
-- Use a lower value for exploratory analysis or weak-effect datasets.
-- Use a higher value for high-confidence candidate screening.
-- Common exploratory values include `0`, `0.1`, and `0.2`.
-- More stringent values such as `0.3` may be useful when focusing on stronger methylation differences.
+### `--methy-diff-dmr`
+
+Minimum absolute regional methylation difference required for each pairwise DMR support.
+
+Default:
+
+```bash
+--methy-diff-dmr 0.0
+```
+
+Example:
+
+```bash
+--methy-diff-dmr 0.2
+```
+
+The regional difference is calculated from aggregated methylated and unmethylated read counts within the candidate region.
+
+The legacy names `--meth-diff` and `--dmr-meth-diff` are retained only as hidden compatibility aliases. New commands should use `--methy-diff-dmp` and `--methy-diff-dmr`.
 
 ## 5. Voting threshold
 
 ### `--vote-threshold`
 
-Final DMP/DMR voting threshold across replicate pairwise comparisons.
-
-For `m` control/wild-type replicates and `n` experimental/mutant replicates, MultiDMPcaller performs `m × n` pairwise comparisons.
-
-The final result is selected based on the support proportion across these pairwise comparisons.
+Fixed support proportion used for final DMP and DMR voting.
 
 Default:
 
 ```bash
---vote-threshold 0.6666666666666666
+--vote-threshold 2/3
 ```
 
-This corresponds approximately to a two-thirds majority rule.
+Decimal values such as `0.6666666667` are also accepted.
 
-### Practical notes
+For `m` control replicates and `n` experimental replicates, MultiDMPcaller performs `m × n` pairwise comparisons and converts the support proportion into an integer required count.
 
-- Lower thresholds, such as `0.5`, are more permissive and may increase recall.
-- Higher thresholds, such as `0.75` or `1.0`, are more stringent and may increase confidence but reduce recall.
-- The default two-thirds threshold is intended as a balanced setting.
+This threshold is used when automatic voting is disabled. It also serves as the fallback if automatic DMP or DMR voting raises an exception or cannot produce a valid threshold.
 
 ## 6. Adaptive q-value module
 
 ### `--auto-qvalue-twostep`
 
-Enable adaptive q-value threshold estimation for two-step FDR contexts.
-
-Example:
+Estimate a data-adaptive DMP q-value threshold for contexts using two-step FDR correction.
 
 ```bash
 --auto-qvalue-twostep
 ```
 
-This option is intended to make q-value threshold selection more data-adaptive in applicable contexts.
 
-## 7. Automatic voting-threshold modules
+### Additional controls
+
+| Argument | Default | Meaning |
+| :--- | :--- | :--- |
+| `--auto-qvalue-p-cutoff` | `0.05` | Candidate p-value upper limit used during estimation. |
+| `--auto-qvalue-min-candidates` | `10` | Minimum candidate count required before automatic estimation is attempted. |
+| `--auto-qvalue-use-smooth` | disabled | Use a smoothed q-value-minus-p-value curve. |
+| `--auto-qvalue-smooth-sigma` | `4` | Gaussian smoothing sigma when smoothing is enabled. |
+
+For formal analysis, the default raw-difference setting is recommended unless smoothing has been explicitly justified.
+
+## 7. Automatic voting modules
 
 ### `--auto-dmp-vote-threshold`
 
-Automatically estimate the final DMP voting requirement across replicate comparisons.
+Automatically estimate the integer support count required for final DMP calling.
 
 ### `--auto-dmr-vote-threshold`
 
-Automatically estimate the final DMR voting requirement across replicate comparisons.
+Automatically estimate the integer support count required for final DMR calling.
 
-### Recommended use
 
-For users who want fixed, reproducible thresholds, explicitly set:
-
-```bash
---vote-threshold 0.6666666666666666
-```
-
-For users who want data-adaptive voting requirements, enable:
-
-```bash
---auto-dmp-vote-threshold \
---auto-dmr-vote-threshold
-```
+If GMM fitting or threshold calculation raises an exception, the program falls back to the support requirement implied by `--vote-threshold`. A convergence warning alone does not necessarily trigger fallback.
 
 ## 8. Low-difference strict voting
 
 ### `--dmp-lowdiff-strict-vote`
 
-Enable stricter final-DMP voting for low-difference candidates.
+Apply an additional strict-voting rule to provisional final DMPs with relatively small boundary methylation differences.
 
 ### `--dmp-lowdiff-cutoff`
 
-Boundary absolute MethDiff cutoff used to define low-difference final DMP candidates.
+Boundary absolute MethDiff cutoff used to identify provisional DMPs requiring stricter voting.
 
 Default:
 
@@ -282,9 +247,8 @@ Default:
 --dmp-lowdiff-cutoff 0.3
 ```
 
-### Recommended use
 
-Low-difference strict voting can be used when users want to make the final DMP set more conservative for candidates with relatively small methylation differences.
+The `--methy-diff-dmp` hard filter is applied first at the pairwise-support layer. Low-difference strict voting is applied later to provisional final DMPs.
 
 ## 9. Runtime and workflow control
 
@@ -298,14 +262,21 @@ Default:
 --threads 1
 ```
 
-Recommended starting values:
+Safe parallel stages include raw-file conversion, replicate-pair processing, and common DMR aggregation. The actual number of preprocessing workers cannot exceed the number of replicate files.
+
+Start with:
 
 ```bash
 --threads 2
+```
+
+or:
+
+```bash
 --threads 4
 ```
 
-Using too many threads may increase memory and I/O pressure, especially on shared servers.
+Increasing the value can increase memory use and disk-I/O pressure.
 
 ### `--dmr-engine`
 
@@ -317,52 +288,68 @@ Default:
 --dmr-engine python
 ```
 
-To use the accelerated C++ DMR engine:
+Accelerated C++ mode:
 
 ```bash
 --dmr-engine cpp
 ```
 
-Before using the C++ engine, make sure the following files are available and executable:
+The repository includes:
 
 ```text
 dmr_step1
 dmr_step2_dynamic
+dmr_step1.cpp
+dmr_step2_dynamic.cpp
 ```
 
-On Linux or macOS, run:
+On Linux or macOS:
 
 ```bash
+g++ -O3 -std=c++17 -o dmr_step1 dmr_step1.cpp
+g++ -O3 -std=c++17 -o dmr_step2_dynamic dmr_step2_dynamic.cpp
 chmod +x dmr_step1 dmr_step2_dynamic
 ```
 
+On Windows with MinGW-w64 or a compatible `g++`:
+
+```powershell
+g++ -O3 -std=c++17 -o dmr_step1.exe dmr_step1.cpp
+g++ -O3 -std=c++17 -o dmr_step2_dynamic.exe dmr_step2_dynamic.cpp
+```
+
+On Windows, add the directory containing the compiled `.exe` files to `PATH`.
+
 ### `--skip-dmr`
 
-Skip all DMR-related steps.
-
-This is useful for DMP-only analysis or quick testing.
-
-Example:
-
-```bash
---skip-dmr
-```
+Skip all DMR-related steps and generate DMP outputs only.
 
 ### `--skip-window`
 
-Skip sliding-window and visualization steps.
+Skip sliding-window and visualization steps and generate table outputs only.
 
-This is useful when only tabular output is needed.
+## 10. Low-memory preprocessing
 
-Example:
+The raw-file conversion stage:
 
-```bash
---skip-window
-```
+- reads input files in chunks;
+- writes output matrices in row blocks;
+- uses `--threads` for replicate-level parallel conversion.
 
-## 10. Suggested parameter sets
+Optional environment variables:
 
-### 10.1 Quick sanity test
+| Variable | Default | Meaning |
+| :--- | :--- | :--- |
+| `MULTIDMPCALLER_NEWTOBOTH_CHUNKSIZE` | `1000000` | Number of input rows read per chunk. |
+| `MULTIDMPCALLER_NEWTOBOTH_BLOCK_ROWS` | `100000` | Number of matrix rows written per block. |
+
+Most users should keep the defaults. Lower values can reduce peak memory but increase temporary-file and disk-I/O overhead.
+
+Input directories must be writable and have enough free disk space for generated matrices and temporary spill files.
+
+## 11. Suggested parameter sets
+
+### 11.1 Quick sanity test
 
 ```bash
 python MultiDMPcaller.py \
@@ -375,7 +362,7 @@ python MultiDMPcaller.py \
   --skip-window
 ```
 
-### 10.2 Standard plant analysis
+### 11.2 Adaptive plant workflow
 
 ```bash
 python MultiDMPcaller.py \
@@ -384,6 +371,13 @@ python MultiDMPcaller.py \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
+  --q-cpg 0.05 \
+  --q-chg 0.04 \
+  --q-chh 0.045 \
+  --dmr-q 0.05 \
+  --methy-diff-dmp 0.0 \
+  --methy-diff-dmr 0.0 \
+  --vote-threshold 2/3 \
   --threads 4 \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
@@ -391,7 +385,7 @@ python MultiDMPcaller.py \
   --auto-dmr-vote-threshold
 ```
 
-### 10.3 Standard animal analysis
+### 11.3 Adaptive animal workflow
 
 ```bash
 python MultiDMPcaller.py \
@@ -400,6 +394,13 @@ python MultiDMPcaller.py \
   --dir-wt liver \
   --dir-mut brain \
   --biotype 0 \
+  --q-cpg 0.05 \
+  --q-chg 0.04 \
+  --q-chh 0.045 \
+  --dmr-q 0.05 \
+  --methy-diff-dmp 0.0 \
+  --methy-diff-dmr 0.0 \
+  --vote-threshold 2/3 \
   --threads 4 \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
@@ -407,7 +408,7 @@ python MultiDMPcaller.py \
   --auto-dmr-vote-threshold
 ```
 
-### 10.4 Conservative high-confidence analysis
+### 11.4 Conservative high-confidence workflow
 
 ```bash
 python MultiDMPcaller.py \
@@ -416,12 +417,13 @@ python MultiDMPcaller.py \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
-  --meth-diff 0.2 \
+  --methy-diff-dmp 0.2 \
+  --methy-diff-dmr 0.2 \
   --vote-threshold 0.75 \
   --threads 4
 ```
 
-### 10.5 Exploratory analysis
+### 11.5 Exploratory workflow
 
 ```bash
 python MultiDMPcaller.py \
@@ -430,24 +432,26 @@ python MultiDMPcaller.py \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
-  --meth-diff 0 \
+  --methy-diff-dmp 0 \
+  --methy-diff-dmr 0 \
   --vote-threshold 0.5 \
   --threads 4
 ```
 
-## 11. Recommended reporting for reproducibility
+## 12. Reproducibility checklist
 
-When reporting results generated by MultiDMPcaller, we recommend recording:
+Record:
 
-- MultiDMPcaller version or GitHub commit hash
-- Full command line
-- `--biotype`
-- q-value thresholds
-- `--meth-diff`
-- `--vote-threshold`
-- Whether adaptive q-value estimation was enabled
-- Whether automatic vote-threshold estimation was enabled
-- Whether low-difference strict voting was enabled
-- Whether C++ or Python DMR engine was used
-- Number of threads
-- Operating system and Python version
+- MultiDMPcaller version or GitHub commit hash;
+- full command line;
+- `--biotype`;
+- all q-value thresholds;
+- `--methy-diff-dmp` and `--methy-diff-dmr`;
+- `--vote-threshold`;
+- whether adaptive q-value estimation was enabled;
+- whether automatic DMP or DMR voting was enabled;
+- whether low-difference strict voting was enabled;
+- whether the Python or C++ DMR engine was used;
+- number of worker processes;
+- operating system, architecture, and Python version;
+- checksums of the input files when possible.
