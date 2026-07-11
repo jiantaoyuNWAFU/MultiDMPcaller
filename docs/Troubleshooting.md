@@ -1,18 +1,18 @@
 # Troubleshooting Guide
 
-This guide summarizes common problems that may occur when running **MultiDMPcaller**, together with possible causes and suggested solutions.
+This guide summarizes common problems that may occur when running **MultiDMPcaller**, together with likely causes and suggested solutions.
 
 ## 1. Installation and environment issues
 
-### 1.1 `ModuleNotFoundError: No module named 'pandas'`, `scipy`, `sklearn`, or other packages
+### 1.1 `ModuleNotFoundError` for `pandas`, `scipy`, `sklearn`, or another package
 
 #### Possible cause
 
-The Python environment has not been activated, or required packages have not been installed.
+The intended Python environment has not been activated, or the required packages have not been installed.
 
 #### Solution
 
-Create and activate the recommended conda environment:
+Create and activate the recommended Conda environment:
 
 ```bash
 conda create -n multidmpcaller python=3.10 -y
@@ -20,42 +20,78 @@ conda activate multidmpcaller
 pip install -r requirements.txt
 ```
 
-Alternatively, use `venv`:
+Alternatively, create a virtual environment with `venv`:
 
 ```bash
 python -m venv multidmpcaller_env
+```
+
+Activate it on Linux or macOS:
+
+```bash
 source multidmpcaller_env/bin/activate
+```
+
+Activate it in Windows PowerShell:
+
+```powershell
+.\multidmpcaller_env\Scripts\Activate.ps1
+```
+
+Activate it in Windows Command Prompt:
+
+```bat
+multidmpcaller_env\Scripts\activate.bat
+```
+
+Then install the dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-Then check:
+Check the installation:
 
 ```bash
 python --version
 python -c "import pandas, scipy, sklearn, matplotlib; print('OK')"
 ```
 
+Python 3.10 is recommended and was used for validation.
+
 ### 1.2 The program uses the wrong Python environment
 
 #### Possible cause
 
-Multiple Python environments are installed, and the command is executed under a different environment.
+Multiple Python installations or environments are available, and the command is being executed with a different interpreter.
 
 #### Solution
 
-Check the active Python interpreter:
+On Linux or macOS, check:
 
 ```bash
 which python
-python --version
 which pip
+python --version
 ```
 
-If using conda, activate the environment before running:
+In Windows PowerShell, check:
 
-```bash
-conda activate multidmpcaller
+```powershell
+Get-Command python
+Get-Command pip
+python --version
 ```
+
+In Windows Command Prompt, check:
+
+```bat
+where python
+where pip
+python --version
+```
+
+Activate the intended environment before running MultiDMPcaller.
 
 ### 1.3 Matplotlib or display-related errors on a server
 
@@ -65,7 +101,7 @@ The server does not have a graphical display environment.
 
 #### Solution
 
-If you do not need visualization, use:
+If visualization is not required, use:
 
 ```bash
 --skip-window
@@ -83,42 +119,76 @@ python MultiDMPcaller.py \
   --skip-window
 ```
 
-If the error persists, check whether your Python environment has a working non-interactive matplotlib backend.
+If the error persists, verify that the Python environment has a working non-interactive Matplotlib backend.
 
 ## 2. C++ DMR engine issues
 
-### 2.1 `dmr_step1` or `dmr_step2_dynamic` not found
+### 2.1 `dmr_step1` or `dmr_step2_dynamic` cannot be found
 
 #### Possible cause
 
-The accelerated C++ DMR engine files are missing or not placed in the same directory as the main Python script.
+The C++ executables are missing, are not executable, or are not discoverable by the program.
 
-#### Solution
+The repository includes both source files:
 
-Make sure these two files are located together with `MultiDMPcaller.py`:
+```text
+dmr_step1.cpp
+dmr_step2_dynamic.cpp
+```
+
+and precompiled Linux executables:
 
 ```text
 dmr_step1
 dmr_step2_dynamic
 ```
 
-Then run with:
+#### Solution on Linux or macOS
+
+Place the executables beside `MultiDMPcaller.py` and make them executable:
+
+```bash
+chmod +x dmr_step1 dmr_step2_dynamic
+```
+
+They can also be compiled from source:
+
+```bash
+g++ -O3 -std=c++17 -o dmr_step1 dmr_step1.cpp
+g++ -O3 -std=c++17 -o dmr_step2_dynamic dmr_step2_dynamic.cpp
+chmod +x dmr_step1 dmr_step2_dynamic
+```
+
+#### Solution on Windows
+
+Compile the source files with MinGW-w64 or another compatible `g++` installation:
+
+```powershell
+g++ -O3 -std=c++17 -o dmr_step1.exe dmr_step1.cpp
+g++ -O3 -std=c++17 -o dmr_step2_dynamic.exe dmr_step2_dynamic.cpp
+```
+
+Add the directory containing the compiled `.exe` files to `PATH` before running MultiDMPcaller.
+
+Enable the C++ engine with:
 
 ```bash
 --dmr-engine cpp
 ```
 
-If the files are not available, use the default Python DMR engine by omitting `--dmr-engine cpp`.
+The Python DMR engine remains the default:
+
+```bash
+--dmr-engine python
+```
 
 ### 2.2 `Permission denied` when using the C++ DMR engine
 
 #### Possible cause
 
-The C++ executable files do not have executable permission.
+On Linux or macOS, the executable permission is missing.
 
 #### Solution
-
-On Linux or macOS, run:
 
 ```bash
 chmod +x dmr_step1 dmr_step2_dynamic
@@ -128,13 +198,13 @@ Then rerun the command.
 
 ### 2.3 The C++ DMR engine fails, but DMP outputs are generated
 
-#### Possible cause
+#### Explanation
 
-The DMP calling step and DMR calling step are separate. DMP outputs may be generated successfully even if the DMR engine fails.
+DMP calling and DMR calling are separate stages. DMP outputs can be generated successfully even if the DMR engine fails.
 
-#### Solution
+#### Suggested checks
 
-First verify DMP-only analysis:
+First run a DMP-only analysis:
 
 ```bash
 python MultiDMPcaller.py \
@@ -146,10 +216,10 @@ python MultiDMPcaller.py \
   --skip-dmr
 ```
 
-If DMP-only analysis works, the problem is likely specific to DMR calling or the C++ DMR engine. Try the Python DMR engine by omitting:
+If the DMP-only run succeeds, inspect the C++ DMR logs and verify that both executables match the current operating system and architecture. You can also compare behavior with:
 
 ```bash
---dmr-engine cpp
+--dmr-engine python
 ```
 
 ## 3. Input file and directory problems
@@ -160,35 +230,24 @@ If DMP-only analysis works, the problem is likely specific to DMR calling or the
 
 The directory name and file suffix are inconsistent.
 
-MultiDMPcaller expects files to follow this pattern:
+MultiDMPcaller expects:
 
 ```text
 {replicate_index}-{directory_name}.txt
 ```
 
-For example, if the directory is named `wt`, expected files are:
+For example:
 
 ```text
 wt/1-wt.txt
 wt/2-wt.txt
-```
-
-If the directory is named `mut`, expected files are:
-
-```text
 mut/1-mut.txt
 mut/2-mut.txt
 ```
 
 #### Solution
 
-Check the directory structure:
-
-```bash
-tree wt mut
-```
-
-If necessary, rename files or create symbolic links:
+Rename the files so that their suffix matches the directory name. On Linux or macOS, symbolic links can also be used:
 
 ```bash
 ln -s original_control_rep1.txt wt/1-wt.txt
@@ -199,26 +258,13 @@ ln -s original_treatment_rep2.txt mut/2-mut.txt
 
 ### 3.2 The number of input files does not match `--wt-reps` or `--mut-reps`
 
-#### Possible cause
-
-The number of replicate files in the input directory does not match the command-line arguments.
-
-#### Solution
-
-Check the files:
-
-```bash
-ls -lh wt
-ls -lh mut
-```
-
-For example, if you specify:
+If the command contains:
 
 ```bash
 --wt-reps 2 --mut-reps 3
 ```
 
-you should have:
+then the input directories must contain:
 
 ```text
 wt/1-wt.txt
@@ -228,98 +274,49 @@ mut/2-mut.txt
 mut/3-mut.txt
 ```
 
-### 3.3 Replicate indices are not consecutive
+Replicate indices must start from `1` and be consecutive.
 
-#### Possible cause
+### 3.3 The input file has the wrong number of columns
 
-Replicate indices should start from 1 and be consecutive. For example, `1-wt.txt` and `3-wt.txt` without `2-wt.txt` may cause problems.
-
-#### Solution
-
-Rename or link the files so that indices are consecutive:
-
-```text
-1-wt.txt
-2-wt.txt
-3-wt.txt
-```
-
-### 3.4 The input file has the wrong number of columns
-
-#### Possible cause
-
-Each input row should contain five fields:
+Each data row must contain five whitespace- or tab-separated fields:
 
 ```text
 Chromosome    Position    Methylated_reads    Unmethylated_reads    Context
 ```
 
-#### Solution
-
-Check the first few lines:
-
-```bash
-head -5 wt/1-wt.txt
-head -5 mut/1-mut.txt
-```
-
-Check the number of columns:
+On Linux or macOS, check with:
 
 ```bash
 awk '{print NF}' wt/1-wt.txt | sort | uniq -c
-awk '{print NF}' mut/1-mut.txt | sort | uniq -c
 ```
 
-Valid data rows should have five fields.
+Valid rows should have five fields.
 
-### 3.5 The input file contains a header line
-
-#### Possible cause
+### 3.4 The input file contains a header line
 
 MultiDMPcaller expects input files without a header.
 
-#### Solution
-
-Remove the header:
+On Linux or macOS, remove the first line with:
 
 ```bash
 tail -n +2 input_with_header.txt > input_no_header.txt
 ```
 
-Then use the no-header file as input.
+### 3.5 Read counts are not valid non-negative integers
 
-### 3.6 Methylated or unmethylated read counts are not numeric
+Columns 3 and 4 must contain non-negative integer read counts.
 
-#### Possible cause
+Invalid examples include `NA`, negative values, or decimal values.
 
-Columns 3 and 4 should contain numeric read counts.
-
-#### Solution
-
-Check the file:
+On Linux or macOS, check with:
 
 ```bash
-awk 'NF>=4 && ($3 !~ /^[0-9.]+$/ || $4 !~ /^[0-9.]+$/) {print NR, $0; exit}' wt/1-wt.txt
+awk 'NF>=4 && ($3 !~ /^[0-9]+$/ || $4 !~ /^[0-9]+$/) {print NR, $0; exit}' wt/1-wt.txt
 ```
 
-If problematic rows exist, fix or remove them before running MultiDMPcaller.
+### 3.6 Invalid methylation-context labels
 
-### 3.7 Invalid methylation context labels
-
-#### Possible cause
-
-The context column contains labels other than `CpG`, `CHG`, or `CHH`.
-
-#### Solution
-
-Check the context labels:
-
-```bash
-awk '{print $5}' wt/1-wt.txt | sort | uniq -c
-awk '{print $5}' mut/1-mut.txt | sort | uniq -c
-```
-
-Recommended labels:
+Recommended labels are:
 
 ```text
 CpG
@@ -327,48 +324,36 @@ CHG
 CHH
 ```
 
-If your upstream tool uses `CG`, convert it to `CpG` if needed:
+Common `CG`-style labels are normalized to `CpG`, but consistent labels are recommended.
+
+### 3.7 Chromosome names differ between replicates
+
+Chromosome labels such as `1`, `chr1`, and `Chr1` are normalized internally. Consistent naming is still recommended for easier interpretation and debugging.
+
+### 3.8 The input directory is not writable or the disk is full
+
+The preprocessing stage writes context-specific matrices and temporary spill files into the input directories. The directories therefore must be writable and must have sufficient free disk space.
+
+On Linux or macOS, check:
 
 ```bash
-awk 'BEGIN{OFS="\t"} {$5=($5=="CG" ? "CpG" : $5); print}' input.txt > converted.txt
+df -h .
+ls -ld wt mut
 ```
 
-### 3.8 Chromosome names differ between replicates
+On Windows PowerShell, check the target drive with:
 
-#### Possible cause
-
-Some files use `chr1`, while others use `1`, `Chr1`, or other naming conventions.
-
-MultiDMPcaller normalizes common chromosome labels internally, but consistent naming is still recommended.
-
-#### Solution
-
-Inspect chromosome names:
-
-```bash
-awk '{print $1}' wt/1-wt.txt | sort | uniq | head
-awk '{print $1}' mut/1-mut.txt | sort | uniq | head
+```powershell
+Get-PSDrive
 ```
-
-If needed, standardize chromosome labels before analysis.
 
 ## 4. Parameter-related problems
 
 ### 4.1 No or very few DMPs are detected
 
-#### Possible causes
+Possible causes include overly strict q-value, methylation-difference, or voting thresholds; low coverage; weak biological effects; or an inappropriate `--biotype` setting.
 
-- The selected organism/data mode is not appropriate.
-- The q-value thresholds are too strict.
-- The methylation-difference threshold is too strict.
-- The vote threshold is too strict.
-- Input coverage is low.
-- The biological difference between groups is weak.
-- Chromosome names or context labels are inconsistent.
-
-#### Suggested checks
-
-Start with a DMP-only exploratory run:
+Try an exploratory DMP-only run:
 
 ```bash
 python MultiDMPcaller.py \
@@ -377,7 +362,7 @@ python MultiDMPcaller.py \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
-  --meth-diff 0 \
+  --methy-diff-dmp 0 \
   --q-cpg 0.05 \
   --q-chg 0.05 \
   --q-chh 0.05 \
@@ -386,155 +371,138 @@ python MultiDMPcaller.py \
   --skip-window
 ```
 
-If this produces DMPs, gradually increase stringency.
+If this produces DMPs, increase stringency gradually.
 
 ### 4.2 Too many DMPs are detected
 
-#### Possible causes
-
-- `--meth-diff` is too low.
-- `--vote-threshold` is too permissive.
-- There may be replicate-level quality differences.
-- The dataset may contain strong global methylation differences.
-
-#### Suggested solution
-
-Use stricter thresholds:
+Use a more stringent site-level difference or voting threshold, for example:
 
 ```bash
---meth-diff 0.2
---vote-threshold 0.6666666666666666
+--methy-diff-dmp 0.2
+--vote-threshold 2/3
 ```
 
-You may also inspect replicate-level methylation distributions before final interpretation.
+Also inspect replicate-level methylation distributions and sample quality.
 
-### 4.3 Animal data were accidentally run with plant mode
+### 4.3 Too many or too few DMR supports are detected
 
-#### Possible cause
-
-Animal WGBS data should generally use:
+The DMR-specific methylation-difference filter is controlled by:
 
 ```bash
---biotype 0
+--methy-diff-dmr
 ```
 
-If animal data are run with plant mode, the context-specific two-step strategy may not match the intended data mode.
-
-#### Solution
-
-Rerun using:
+For example:
 
 ```bash
---biotype 0
+--methy-diff-dmr 0.2
 ```
 
-### 4.4 Plant data were accidentally run with animal mode
+requires an absolute regional methylation difference of at least 20 percentage points for a pairwise DMR support. The regional difference is calculated from aggregated methylated and unmethylated read counts within the candidate region.
 
-#### Possible cause
+### 4.4 Animal data were run with plant mode, or plant data were run with animal mode
 
-Plant WGBS data should generally use:
+Use:
 
-```bash
---biotype 1
+```text
+--biotype 0    animal
+--biotype 1    plant
+--biotype 2    no p-value prefiltering for any context
 ```
 
-This is especially important for CHG and CHH methylation contexts.
+### 4.5 Automatic threshold estimation changed the final output
 
-#### Solution
+The following options can change final calling thresholds:
 
-Rerun using:
-
-```bash
---biotype 1
+```text
+--auto-qvalue-twostep
+--auto-dmp-vote-threshold
+--auto-dmr-vote-threshold
 ```
 
-### 4.5 Threshold-estimation options changed the final output unexpectedly
-
-#### Possible cause
-
-Options such as `--auto-qvalue-twostep`, `--auto-dmp-vote-threshold`, and `--auto-dmr-vote-threshold` may change thresholds used in final calling.
-
-#### Solution
-
-For formal analysis, record whether these options were enabled. If you need fully fixed thresholds, omit automatic threshold-estimation options and explicitly specify:
+For fully fixed thresholds, omit the automatic options and explicitly set:
 
 ```bash
 --q-cpg 0.05
 --q-chg 0.04
 --q-chh 0.045
 --dmr-q 0.05
---vote-threshold 0.6666666666666666
+--vote-threshold 2/3
 ```
 
-## 5. Runtime and memory problems
+
+### 4.6 Automatic voting fails during GMM fitting or threshold calculation
+
+If the automatic DMP or DMR voting model raises an exception, MultiDMPcaller falls back to the support requirement implied by `--vote-threshold`. If this parameter is not supplied, the default two-thirds rule is used.
+
+A convergence warning alone does not necessarily trigger this fallback; the fallback applies when fitting or threshold calculation raises an actual exception.
+
+## 5. Runtime, memory, and preprocessing problems
 
 ### 5.1 The program is slow
 
-#### Possible causes
-
-- Large WGBS datasets contain tens of millions of methylation sites.
-- DMR calling can be time-consuming.
-- Visualization can add extra runtime.
-- Too many threads may increase I/O pressure on some systems.
-
-#### Suggested solutions
-
-Use a moderate number of threads first:
-
-```bash
---threads 4
-```
-
-Use the C++ DMR engine if available:
-
-```bash
---dmr-engine cpp
-```
-
-Skip DMR calling during DMP-only tests:
-
-```bash
---skip-dmr
-```
-
-Skip visualization if only tables are needed:
-
-```bash
---skip-window
-```
-
-### 5.2 The job is killed by the system
-
-#### Possible cause
-
-The job may exceed available memory or runtime limits.
-
-#### Suggested solutions
-
-Use fewer threads:
+Large WGBS files can contain tens of millions of sites. Start with:
 
 ```bash
 --threads 2
 ```
 
-Skip optional steps:
+or:
 
 ```bash
+--threads 4
+```
+
+The `--threads` value controls safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. More workers can increase disk-I/O pressure and may not always improve runtime.
+
+Other options include:
+
+```bash
+--dmr-engine cpp
 --skip-dmr
 --skip-window
 ```
 
-Run the job on a machine with more memory if possible.
+### 5.2 The job is killed by the system
 
-### 5.3 The terminal disconnects during a long run
+Possible causes include insufficient memory, insufficient disk space, excessive parallelism, or external runtime limits.
 
-#### Possible cause
+Try:
 
-Long jobs may continue running or be terminated depending on the shell/session environment.
+```bash
+--threads 1
+```
 
-#### Suggested solution
+or:
 
-Use `nohup` for long-running analyses:
+```bash
+--threads 2
+```
+
+The low-memory preprocessing stage can also be tuned with:
+
+```text
+MULTIDMPCALLER_NEWTOBOTH_CHUNKSIZE
+MULTIDMPCALLER_NEWTOBOTH_BLOCK_ROWS
+```
+
+Defaults are `1000000` input rows per chunk and `100000` output rows per block. Lower values can reduce peak memory but increase temporary-file and I/O overhead.
+
+### 5.3 Temporary `newtoboth_*` directories remain after interruption
+
+Normal completion and ordinary exceptions trigger automatic cleanup. A forced termination such as `kill -9`, a power failure, or an external scheduler kill may prevent cleanup.
+
+After confirming that no MultiDMPcaller process is running, residual directories can be located on Linux or macOS with:
+
+```bash
+find wt mut -maxdepth 1 -type d -name 'newtoboth_*'
+```
+
+Remove only confirmed stale directories.
+
+### 5.4 The terminal disconnects during a long run
+
+On Linux or macOS, use `nohup`:
 
 ```bash
 nohup python MultiDMPcaller.py \
@@ -554,19 +522,19 @@ Monitor the log:
 tail -f run.log
 ```
 
+On Windows, use a persistent PowerShell session, Windows Terminal, Task Scheduler, or another process-management method appropriate for the local environment.
+
 ## 6. Output-related problems
 
-### 6.1 I cannot find the final DMP files
+### 6.1 Final DMP files cannot be found
 
-#### Solution
-
-Check the `and_output/` directory:
+Check:
 
 ```bash
 ls -lh and_output/*final_significant_sites_DMPs*
 ```
 
-Expected files include:
+Expected names include:
 
 ```text
 and_output/CpG-final_significant_sites_DMPs.txt
@@ -574,13 +542,9 @@ and_output/CHG-final_significant_sites_DMPs.txt
 and_output/CHH-final_significant_sites_DMPs.txt
 ```
 
-### 6.2 I cannot find the final DMR files
+A context-specific file may be absent if that context was not present or no output was produced for it.
 
-#### Possible cause
-
-DMR calling may have been skipped, failed, or produced no significant DMRs.
-
-#### Solution
+### 6.2 Final DMR files cannot be found
 
 Check:
 
@@ -588,109 +552,46 @@ Check:
 ls -lh and_output/*final_significant_regions_DMRs*
 ```
 
-If you used `--skip-dmr`, DMR files will not be generated.
-
-If DMR calling failed, inspect the log file.
+DMR files are not generated when `--skip-dmr` is used. If DMR calling failed, inspect the run log and C++ engine logs if applicable.
 
 ### 6.3 Visualization outputs are missing
 
-#### Possible cause
-
-Visualization was skipped with:
+Visualization is not generated when:
 
 ```bash
 --skip-window
 ```
 
-#### Solution
+is used.
 
-Rerun without `--skip-window` if visualization files are needed.
+### 6.4 Pairwise outputs exist, but final DMP or DMR files are empty
 
-### 6.4 Pairwise outputs exist, but final DMP/DMR files are empty
-
-#### Possible cause
-
-Some sites or regions may be significant in individual pairwise comparisons but fail to meet the final voting/support threshold.
-
-#### Solution
-
-Try a more permissive exploratory vote threshold:
+A site or region can be significant in one pairwise comparison but fail the final support requirement. For exploratory analysis, compare with a more permissive setting such as:
 
 ```bash
 --vote-threshold 0.5
 ```
 
-Then compare with stricter settings.
+### 6.5 Results differ from other tools
 
-### 6.5 Results are different from other tools
+Different methylation-analysis tools use different statistical tests, replicate models, filtering rules, multiple-testing procedures, and DMR definitions. Exact agreement with methylKit, DSS, DMRcaller, methylSig, DMRcate, or other tools is not expected.
 
-#### Explanation
-
-Different methylation analysis tools use different statistical tests, replicate models, filtering criteria, multiple-testing correction procedures, and DMR definitions. Exact agreement with methylKit, DSS, DMRcaller, methylSig, DMRcate, or other tools should not be expected.
-
-MultiDMPcaller uses all pairwise comparisons between groups and applies a final voting strategy across comparisons.
+MultiDMPcaller performs all pairwise comparisons between the two groups and then applies final support voting.
 
 ## 7. Quick self-check before running
 
-Before running MultiDMPcaller, check the following items.
+Confirm that:
 
-### 7.1 Check directory structure
+- the replicate counts match `--wt-reps` and `--mut-reps`;
+- file names match their directory names;
+- each row has five columns and no header;
+- read counts are non-negative integers;
+- context labels are valid;
+- input directories are writable;
+- sufficient disk space is available;
+- the selected `--biotype` is appropriate.
 
-```bash
-tree wt mut
-```
-
-Expected example:
-
-```text
-wt/
-├── 1-wt.txt
-└── 2-wt.txt
-mut/
-├── 1-mut.txt
-└── 2-mut.txt
-```
-
-### 7.2 Check first lines of input files
-
-```bash
-head -5 wt/1-wt.txt
-head -5 mut/1-mut.txt
-```
-
-Expected format:
-
-```text
-chr1    1005    23    5     CpG
-chr1    1030    18    9     CHH
-chr2    5002    7     32    CHG
-```
-
-### 7.3 Check column counts
-
-```bash
-awk '{print NF}' wt/1-wt.txt | sort | uniq -c
-awk '{print NF}' mut/1-mut.txt | sort | uniq -c
-```
-
-Most valid rows should have five columns.
-
-### 7.4 Check methylation contexts
-
-```bash
-awk '{print $5}' wt/1-wt.txt | sort | uniq -c
-awk '{print $5}' mut/1-mut.txt | sort | uniq -c
-```
-
-Expected labels:
-
-```text
-CpG
-CHG
-CHH
-```
-
-### 7.5 Run a small DMP-only test
+A small DMP-only test can be run with:
 
 ```bash
 python MultiDMPcaller.py \
@@ -705,17 +606,18 @@ python MultiDMPcaller.py \
 
 ## 8. Information to include when reporting an issue
 
-When opening a GitHub issue or contacting the developers, please include:
+Please include:
 
-- MultiDMPcaller version or GitHub commit hash
-- Full command line
-- Operating system
-- Python version
-- Whether conda or venv was used
-- Full error log
-- Input directory structure
-- First 5 lines of representative input files
-- Output of `awk '{print NF}' file | sort | uniq -c`
-- Output of `awk '{print $5}' file | sort | uniq -c`
-- Whether the problem still occurs with `--skip-dmr`
-- Whether the problem still occurs with `--skip-window`
+- MultiDMPcaller version or GitHub commit hash;
+- full command line;
+- operating system and architecture;
+- Python version;
+- whether Conda or `venv` was used;
+- full error log;
+- input directory structure;
+- first five lines of representative input files;
+- replicate counts and methylation contexts;
+- available memory and free disk space;
+- whether the problem persists with `--threads 1`;
+- whether it persists with `--skip-dmr` or `--skip-window`;
+- whether the Python or C++ DMR engine was used.
