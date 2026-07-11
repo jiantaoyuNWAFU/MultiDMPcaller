@@ -23,7 +23,6 @@ from collections import namedtuple
 import math
 import matplotlib.ticker as ticker
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
 from matplotlib import colors as mcolors
 from scipy.ndimage import gaussian_filter1d
 
@@ -36,6 +35,10 @@ DMP_QVALUE_THRESHOLDS = {
 
 # DMR q-value significance threshold
 DMR_QVALUE_THRESHOLD = 0.05
+
+# Minimum absolute regional methylation difference required for DMR support.
+# Disabled by default to preserve the original behavior.
+DMR_METH_DIFF_THRESHOLD = 0.0
 
 # Final DMP/DMR voting threshold across replicate combinations; defaults to 2/3 for backward compatibility
 VOTE_THRESHOLD = 2 / 3
@@ -82,825 +85,10 @@ def calc_meth_diff(m1, u1, m2, u2):
     return abs(ratio1 - ratio2)
 
 
-# =========================================================
-# Mianjifa auto-methdiff module (embedded, no GUI)
-# Adapted from mianjifa_automethdiff.py. It only:
-#   1) estimates one global abs(methdiff) threshold from pairwise DMP distributions;
-#   2) saves mxn MethDiff distribution plots for each methylation context.
-# It does not modify pairwise Fisher/FDR logic.
-# =========================================================
-AUTO_METHDIFF_X_MIN = -1.0
-AUTO_METHDIFF_X_MAX = 1.0
-AUTO_METHDIFF_BIN_WIDTH = 0.01
-AUTO_METHDIFF_N_BINS = int(round((AUTO_METHDIFF_X_MAX - AUTO_METHDIFF_X_MIN) / AUTO_METHDIFF_BIN_WIDTH))
-AUTO_METHDIFF_BINS = np.linspace(AUTO_METHDIFF_X_MIN, AUTO_METHDIFF_X_MAX, AUTO_METHDIFF_N_BINS + 1)
-AUTO_METHDIFF_COLOR_NORMAL = "#4C72B0"
-AUTO_METHDIFF_COLOR_CUT = "#DD8452"
-AUTO_METHDIFF_COLOR_ZERO_LINE = "black"
-AUTO_METHDIFF_COLOR_THRESHOLD = "red"
-AUTO_METHDIFF_RAW_CACHE = {}
-
-
-def _mianjifa_safe_name(name: str) -> str:
-    """Generate a filesystem-safe filename component."""
-    return re.sub(r'[\\/:*?"<>|]+', "_", str(name))
-
-
-def _mianjifa_normalize_chr(chr_value):
+def _normalize_chr_label(chr_value):
     """Normalize chromosome labels: chr1/Chr1/1 -> 1."""
     chr_value = str(chr_value).strip()
-    chr_value = re.sub(r"^chr", "", chr_value, flags=re.IGNORECASE)
-    return chr_value
-
-
-def _mianjifa_normalize_context(context_value):
-    """Normalize methylation contexts, allowing CG and CpG to match."""
-    context_value = str(context_value).strip()
-    if context_value.upper() == "CG" or context_value.lower() == "cpg":
-        return "CpG"
-    context_upper = context_value.upper()
-    if context_upper in {"CHG", "CHH"}:
-        return context_upper
-    return context_value
-
-
-def _mianjifa_extract_chr_from_name(filename: str):
-    """Extract chromosome information from names such as DMP_*_Chr1.txt."""
-    m = re.search(r"chr([A-Za-z0-9]+)", filename, flags=re.IGNORECASE)
-    if m:
-        return _mianjifa_normalize_chr(m.group(1))
-    return None
-
-
-def _mianjifa_parse_output_pair(output_dir_name: str):
-    """Parse output_wt1_mut2-like folders into group/replicate labels."""
-    name = output_dir_name
-    if not name.lower().startswith("output_"):
-        raise ValueError(f"Folder name does not start with output_: {name}")
-    body = name[len("output_"):]
-    m = re.match(r"^(.+?)(\d+)[_-](.+?)(\d+)$", body)
-    if not m:
-        raise ValueError(f"Cannot parse output folder name: {name}; expected a format like output_wt1_mut1")
-    group1 = m.group(1)
-    rep1 = int(m.group(2))
-    group2 = m.group(3)
-    rep2 = int(m.group(4))
-    label = f"{group1}{rep1} - {group2}{rep2}"
-    sort_key = (group1, rep1, group2, rep2)
-    return {
-        "group1": group1,
-        "rep1": rep1,
-        "group2": group2,
-        "rep2": rep2,
-        "label": label,
-        "sort_key": sort_key,
-    }
-
-
-def _mianjifa_find_case_insensitive_dir(parent: Path, dirname: str) -> Path:
-    exact = parent / dirname
-    if exact.exists() and exact.is_dir():
-        return exact
-    for p in parent.iterdir():
-        if p.is_dir() and p.name.lower() == dirname.lower():
-            return p
-    raise FileNotFoundError(f"{parent}  does not contain the original group folder: {dirname}")
-
-
-def _mianjifa_resolve_group_dir(selected_dir: Path, group_name: str, mut_dir: str, wt_dir: str) -> Path:
-    """Resolve output-folder group labels to actual input directories."""
-    key = str(group_name).lower().strip("_- ")
-    if key in {"wt", "wild", "wildtype", "control", "ctrl", "dcntrol", "dcontrol", "dcontrols"}:
-        return Path(wt_dir)
-    if key in {"mut", "mutation", "mutant", "case", "treat", "treated", "treatment", "dcases", "dcase"}:
-        return Path(mut_dir)
-
-    # Fallback: try a real folder under the run root, preserving original standalone behavior.
-    return _mianjifa_find_case_insensitive_dir(selected_dir, group_name)
-
-
-def _mianjifa_choose_grid(n: int):
-    """Choose subplot layout for n comparisons."""
-    if n <= 0:
-        return 1, 1
-    ncols = math.ceil(math.sqrt(n))
-    nrows = math.ceil(n / ncols)
-    return nrows, ncols
-
-
-def _mianjifa_read_dmp_sites(dmp_file: Path) -> pd.DataFrame:
-    """Read DMP site positions from a DMP* file; first column is position or chr:pos."""
-    chr_from_name = _mianjifa_extract_chr_from_name(dmp_file.name)
-    records = []
-    with open(dmp_file, "r", encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split()
-            if not parts:
-                continue
-            first = parts[0]
-            if ":" in first:
-                try:
-                    chr_part, pos_part = first.split(":", 1)
-                    chr_value = _mianjifa_normalize_chr(chr_part)
-                    pos = int(float(pos_part))
-                    records.append((chr_value, pos))
-                    continue
-                except Exception:
-                    continue
-            try:
-                pos = int(float(first))
-            except ValueError:
-                continue
-            records.append((chr_from_name, pos))
-    if not records:
-        return pd.DataFrame(columns=["chr", "pos"])
-    df = pd.DataFrame(records, columns=["chr", "pos"])
-    return df.drop_duplicates(subset=["chr", "pos"])
-
-
-def _mianjifa_load_dmp_sites_from_methylation_type_dir(methylation_type_dir: Path) -> pd.DataFrame:
-    dmp_files = sorted([p for p in methylation_type_dir.glob("DMP*") if p.is_file()])
-    if not dmp_files:
-        raise FileNotFoundError(f"{methylation_type_dir}  contains no DMP* files")
-    all_sites = []
-    for dmp_file in dmp_files:
-        sites = _mianjifa_read_dmp_sites(dmp_file)
-        if not sites.empty:
-            all_sites.append(sites)
-    if not all_sites:
-        return pd.DataFrame(columns=["chr", "pos"])
-    result = pd.concat(all_sites, ignore_index=True)
-    return result.drop_duplicates(subset=["chr", "pos"])
-
-
-
-def _mianjifa_load_q_significant_sites_from_fdr(methylation_type_dir: Path):
-    """Load q-significant sites from the complete pairwise FDR table.
-
-    This deliberately ignores MethDiff so that mianjifa estimates its threshold
-    from q-significant sites that have not already been truncated by a user or
-    previous auto-methdiff threshold.
-    """
-    fdr_files = sorted(
-        p for p in methylation_type_dir.glob("FDR_corrected_results_*.txt")
-        if p.is_file()
-    )
-    if not fdr_files:
-        raise FileNotFoundError(
-            f"{methylation_type_dir}  contains no FDR_corrected_results_*.txt"
-        )
-    if len(fdr_files) > 1:
-        raise RuntimeError(
-            f"{methylation_type_dir}  contains multiple FDR files; cannot determine a unique file: "
-            f"{[p.name for p in fdr_files]}"
-        )
-
-    fdr_file = fdr_files[0]
-    try:
-        df = pd.read_csv(fdr_file, sep="\t")
-        if len(df.columns) < 6:
-            df = pd.read_csv(fdr_file, sep=r"\s+", engine="python")
-    except Exception as exc:
-        raise RuntimeError(f"Failed to read FDR file {fdr_file}: {exc}") from exc
-
-    required = {"Chromosome", "Position", "Qvalue"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(
-            f"{fdr_file} is missing required columns {sorted(missing)}; actual columns={list(df.columns)}"
-        )
-
-    qvalue = pd.to_numeric(df["Qvalue"], errors="coerce")
-    fallback_q = get_dmp_threshold(methylation_type_dir.name)
-    if "Qvalue_Threshold_Used" in df.columns:
-        threshold = pd.to_numeric(
-            df["Qvalue_Threshold_Used"], errors="coerce"
-        ).fillna(float(fallback_q))
-        threshold_source = "Qvalue_Threshold_Used"
-    else:
-        threshold = pd.Series(float(fallback_q), index=df.index)
-        threshold_source = "fixed_context_threshold"
-
-    sig_mask = qvalue.notna() & threshold.notna() & (qvalue <= threshold)
-    sig_df = df.loc[sig_mask, ["Chromosome", "Position"]].copy()
-    sig_df["chr"] = sig_df["Chromosome"].map(_mianjifa_normalize_chr)
-    sig_df["pos"] = pd.to_numeric(sig_df["Position"], errors="coerce")
-    sig_df = sig_df.dropna(subset=["pos"])
-    sig_df["pos"] = sig_df["pos"].astype(np.int64)
-    sites = sig_df[["chr", "pos"]].drop_duplicates().reset_index(drop=True)
-
-    stats = {
-        "candidate_source": "FDR_q_significant_without_methdiff_filter",
-        "fdr_file": fdr_file.name,
-        "fdr_total_rows": int(len(df)),
-        "q_significant_site_count": int(len(sites)),
-        "q_threshold_source": threshold_source,
-        "q_threshold_min": float(threshold.min()) if len(threshold) else np.nan,
-        "q_threshold_max": float(threshold.max()) if len(threshold) else np.nan,
-    }
-    return sites, stats
-
-
-def _mianjifa_find_replicate_file(group_dir: Path, group_name: str, rep_id: int) -> Path:
-    """Find raw methylation input file for a replicate in a group directory."""
-    candidates = sorted([p for p in group_dir.glob(f"{rep_id}-*.txt") if p.is_file()])
-    if not candidates:
-        raise FileNotFoundError(f"{group_dir}  not found under  {rep_id}-*.txt")
-
-    exact_name = f"{rep_id}-{group_name}.txt".lower()
-    for p in candidates:
-        if p.name.lower() == exact_name:
-            return p
-
-    contains_group = [p for p in candidates if group_name.lower() in p.name.lower()]
-    if contains_group:
-        return sorted(contains_group, key=lambda x: len(x.name))[0]
-
-    bad_keywords = [
-        "bothmeunme", "diffchromo", "norepeated", "norepeat", "repeated", "repeat",
-        "result", "dmp", "fet", "pvalue", "qvalue",
-    ]
-    filtered = []
-    for p in candidates:
-        lower = p.name.lower()
-        if any(k in lower for k in bad_keywords):
-            continue
-        filtered.append(p)
-    if filtered:
-        return sorted(filtered, key=lambda x: len(x.name))[0]
-    return sorted(candidates, key=lambda x: len(x.name))[0]
-
-
-def _mianjifa_read_raw_methylation_file(file_path: Path, meth_type: str) -> pd.DataFrame:
-    """Read raw 5-column methylation file and return chr,pos,context,meth_rate for one context."""
-    normalized_meth_type = _mianjifa_normalize_context(meth_type)
-    cache_key = (str(file_path.resolve()), str(normalized_meth_type).lower())
-    if cache_key in AUTO_METHDIFF_RAW_CACHE:
-        return AUTO_METHDIFF_RAW_CACHE[cache_key].copy()
-
-    df = pd.read_csv(
-        file_path,
-        sep=r"\s+",
-        header=None,
-        names=["chr", "pos", "meth", "unmeth", "context"],
-        usecols=[0, 1, 2, 3, 4],
-        dtype={"chr": "string", "pos": "int64", "meth": "float64", "unmeth": "float64", "context": "string"},
-        engine="python",
-    )
-    df["chr"] = df["chr"].map(_mianjifa_normalize_chr)
-    df["context"] = df["context"].map(_mianjifa_normalize_context)
-    df = df[df["context"].str.lower() == normalized_meth_type.lower()].copy()
-    if df.empty:
-        result = pd.DataFrame(columns=["chr", "pos", "context", "meth_rate"])
-        AUTO_METHDIFF_RAW_CACHE[cache_key] = result.copy()
-        return result
-
-    df = df.groupby(["chr", "pos", "context"], as_index=False)[["meth", "unmeth"]].sum()
-    total = df["meth"] + df["unmeth"]
-    df = df[total > 0].copy()
-    df["meth_rate"] = df["meth"] / (df["meth"] + df["unmeth"])
-    result = df[["chr", "pos", "context", "meth_rate"]].copy()
-    AUTO_METHDIFF_RAW_CACHE[cache_key] = result.copy()
-    return result
-
-
-def _mianjifa_filter_raw_by_dmp_sites(raw_df: pd.DataFrame, dmp_sites: pd.DataFrame) -> pd.DataFrame:
-    if raw_df.empty or dmp_sites.empty:
-        return raw_df.iloc[0:0].copy()
-    parts = []
-    with_chr = dmp_sites[dmp_sites["chr"].notna()].copy()
-    without_chr = dmp_sites[dmp_sites["chr"].isna()].copy()
-    if not with_chr.empty:
-        with_chr["chr"] = with_chr["chr"].map(_mianjifa_normalize_chr)
-        tmp = pd.merge(raw_df, with_chr[["chr", "pos"]].drop_duplicates(), on=["chr", "pos"], how="inner")
-        parts.append(tmp)
-    if not without_chr.empty:
-        allowed_pos = set(without_chr["pos"].astype(np.int64).tolist())
-        tmp = raw_df[raw_df["pos"].isin(allowed_pos)].copy()
-        parts.append(tmp)
-    if not parts:
-        return raw_df.iloc[0:0].copy()
-    out = pd.concat(parts, ignore_index=True)
-    return out.drop_duplicates(subset=["chr", "pos", "context"])
-
-
-def _mianjifa_calculate_methdiff_from_raw(
-        selected_dir: Path,
-        mut_dir: str,
-        wt_dir: str,
-        group1: str,
-        rep1: int,
-        group2: str,
-        rep2: int,
-        meth_type: str,
-        dmp_sites: pd.DataFrame,
-):
-    """Calculate signed MethDiff = group1_rep1_meth_rate - group2_rep2_meth_rate."""
-    group1_dir = _mianjifa_resolve_group_dir(selected_dir, group1, mut_dir=mut_dir, wt_dir=wt_dir)
-    group2_dir = _mianjifa_resolve_group_dir(selected_dir, group2, mut_dir=mut_dir, wt_dir=wt_dir)
-
-    group1_file = _mianjifa_find_replicate_file(group1_dir, group1, rep1)
-    group2_file = _mianjifa_find_replicate_file(group2_dir, group2, rep2)
-
-    df1 = _mianjifa_read_raw_methylation_file(group1_file, meth_type)
-    df2 = _mianjifa_read_raw_methylation_file(group2_file, meth_type)
-    df1 = _mianjifa_filter_raw_by_dmp_sites(df1, dmp_sites)
-    df2 = _mianjifa_filter_raw_by_dmp_sites(df2, dmp_sites)
-
-    merged = pd.merge(
-        df1,
-        df2,
-        on=["chr", "pos", "context"],
-        how="inner",
-        suffixes=(f"_{group1}{rep1}", f"_{group2}{rep2}"),
-    )
-
-    stats = {
-        "group1_file": group1_file.name,
-        "group2_file": group2_file.name,
-        "group1_dmp_rows": len(df1),
-        "group2_dmp_rows": len(df2),
-        "common_dmp_rows": len(merged),
-    }
-    if merged.empty:
-        return np.array([], dtype=float), stats
-
-    rate1_col = f"meth_rate_{group1}{rep1}"
-    rate2_col = f"meth_rate_{group2}{rep2}"
-    merged["MethDiff"] = merged[rate1_col] - merged[rate2_col]
-    return merged["MethDiff"].to_numpy(dtype=float), stats
-
-
-def _mianjifa_compute_area_threshold_from_hist(counts, bin_edges, side: str, cut_fraction: float):
-    """Compute threshold by cutting a fraction of histogram area outward from zero."""
-    widths = np.diff(bin_edges)
-    if side == "left":
-        idx = np.where(bin_edges[1:] <= 0)[0]
-        idx = idx[::-1]
-    elif side == "right":
-        idx = np.where(bin_edges[:-1] >= 0)[0]
-    else:
-        raise ValueError("side must be 'left' or 'right'")
-    if len(idx) == 0:
-        return None, 0.0, 0.0
-    total_area = float(np.sum(counts[idx] * widths[idx]))
-    if total_area <= 0:
-        return None, 0.0, 0.0
-    target_area = total_area * float(cut_fraction)
-    cumulative_area = 0.0
-    for i in idx:
-        left = bin_edges[i]
-        right = bin_edges[i + 1]
-        height = counts[i]
-        width = widths[i]
-        area = height * width
-        if height <= 0 or area <= 0:
-            continue
-        if cumulative_area + area < target_area:
-            cumulative_area += area
-            continue
-        remain_area = target_area - cumulative_area
-        cut_width = remain_area / height
-        if side == "left":
-            threshold = right - cut_width
-        else:
-            threshold = left + cut_width
-        threshold = max(left, min(right, threshold))
-        return threshold, total_area, target_area
-    if side == "left":
-        return bin_edges[idx[-1]], total_area, target_area
-    return bin_edges[idx[-1] + 1], total_area, target_area
-
-
-def _mianjifa_draw_hist_with_area_cut(ax, counts, bin_edges, left_threshold, right_threshold):
-    """Draw histogram and highlight the central area cut from zero."""
-    widths = np.diff(bin_edges)
-    for i, h in enumerate(counts):
-        if h <= 0:
-            continue
-        left = bin_edges[i]
-        right = bin_edges[i + 1]
-        width = widths[i]
-        if right <= 0 and left_threshold is not None:
-            if right <= left_threshold:
-                ax.bar(left, h, width=width, align="edge", color=AUTO_METHDIFF_COLOR_NORMAL, edgecolor="black", linewidth=0.3)
-            elif left >= left_threshold:
-                ax.bar(left, h, width=width, align="edge", color=AUTO_METHDIFF_COLOR_CUT, edgecolor="black", linewidth=0.3)
-            else:
-                ax.bar(left, h, width=left_threshold - left, align="edge", color=AUTO_METHDIFF_COLOR_NORMAL, edgecolor="black", linewidth=0.3)
-                ax.bar(left_threshold, h, width=right - left_threshold, align="edge", color=AUTO_METHDIFF_COLOR_CUT, edgecolor="black", linewidth=0.3)
-        elif left >= 0 and right_threshold is not None:
-            if right <= right_threshold:
-                ax.bar(left, h, width=width, align="edge", color=AUTO_METHDIFF_COLOR_CUT, edgecolor="black", linewidth=0.3)
-            elif left >= right_threshold:
-                ax.bar(left, h, width=width, align="edge", color=AUTO_METHDIFF_COLOR_NORMAL, edgecolor="black", linewidth=0.3)
-            else:
-                ax.bar(left, h, width=right_threshold - left, align="edge", color=AUTO_METHDIFF_COLOR_CUT, edgecolor="black", linewidth=0.3)
-                ax.bar(right_threshold, h, width=right - right_threshold, align="edge", color=AUTO_METHDIFF_COLOR_NORMAL, edgecolor="black", linewidth=0.3)
-        else:
-            ax.bar(left, h, width=width, align="edge", color=AUTO_METHDIFF_COLOR_NORMAL, edgecolor="black", linewidth=0.3)
-
-
-def _mianjifa_plot_one_comparison_on_ax(ax, methdiff_values, title, cut_fraction):
-    """Plot one comparison's signed MethDiff histogram."""
-    values = np.asarray(methdiff_values, dtype=float)
-    values = values[np.isfinite(values)]
-    values = values[(values >= AUTO_METHDIFF_X_MIN) & (values <= AUTO_METHDIFF_X_MAX)]
-    if len(values) == 0:
-        ax.text(0.5, 0.5, "No common DMP sites", ha="center", va="center", transform=ax.transAxes)
-        ax.set_title(title, fontsize=10)
-        ax.set_xlim(AUTO_METHDIFF_X_MIN, AUTO_METHDIFF_X_MAX)
-        ax.set_xlabel("MethDiff")
-        ax.set_ylabel("Frequency")
-        return {
-            "n": 0,
-            "left_threshold": None,
-            "right_threshold": None,
-            "left_total_area": 0,
-            "right_total_area": 0,
-            "left_target_area": 0,
-            "right_target_area": 0,
-        }
-
-    counts, bin_edges = np.histogram(values, bins=AUTO_METHDIFF_BINS)
-    left_threshold, left_total_area, left_target_area = _mianjifa_compute_area_threshold_from_hist(
-        counts, bin_edges, side="left", cut_fraction=cut_fraction
-    )
-    right_threshold, right_total_area, right_target_area = _mianjifa_compute_area_threshold_from_hist(
-        counts, bin_edges, side="right", cut_fraction=cut_fraction
-    )
-    _mianjifa_draw_hist_with_area_cut(ax, counts, bin_edges, left_threshold, right_threshold)
-    ax.axvline(0, color=AUTO_METHDIFF_COLOR_ZERO_LINE, linestyle="-", linewidth=1.2)
-    if left_threshold is not None:
-        ax.axvline(left_threshold, color=AUTO_METHDIFF_COLOR_THRESHOLD, linestyle="--", linewidth=1.5)
-    if right_threshold is not None:
-        ax.axvline(right_threshold, color=AUTO_METHDIFF_COLOR_THRESHOLD, linestyle="--", linewidth=1.5)
-
-    threshold_text = []
-    if left_threshold is not None:
-        threshold_text.append(f"L={left_threshold:.4f}")
-    if right_threshold is not None:
-        threshold_text.append(f"R={right_threshold:.4f}")
-    if threshold_text:
-        title = title + "\n" + ", ".join(threshold_text)
-    ax.set_title(title, fontsize=10)
-    ax.set_xlabel("MethDiff")
-    ax.set_ylabel("Frequency")
-    ax.set_xlim(AUTO_METHDIFF_X_MIN, AUTO_METHDIFF_X_MAX)
-    ax.grid(axis="y", alpha=0.3)
-    return {
-        "n": len(values),
-        "left_threshold": left_threshold,
-        "right_threshold": right_threshold,
-        "left_total_area": left_total_area,
-        "right_total_area": right_total_area,
-        "left_target_area": left_target_area,
-        "right_target_area": right_target_area,
-    }
-
-
-def _mianjifa_find_output_dirs(selected_dir: Path):
-    """Find output_*_* folders that can be parsed as pairwise comparisons."""
-    output_dirs = []
-    for p in selected_dir.iterdir():
-        if not p.is_dir() or not p.name.lower().startswith("output_"):
-            continue
-        try:
-            info = _mianjifa_parse_output_pair(p.name)
-        except Exception:
-            continue
-        output_dirs.append((info["sort_key"], info, p))
-    return sorted(output_dirs, key=lambda x: x[0])
-
-
-def _mianjifa_collect_methylation_types(output_dir_records):
-    """Collect context folders containing complete pairwise FDR tables."""
-    meth_types = set()
-    for _, _, output_dir in output_dir_records:
-        for sub in output_dir.iterdir():
-            if not sub.is_dir():
-                continue
-            has_fdr = any(
-                p.is_file()
-                for p in sub.glob("FDR_corrected_results_*.txt")
-            )
-            if has_fdr:
-                meth_types.add(sub.name)
-    preferred = ["CpG", "CHG", "CHH"]
-    return sorted(
-        meth_types,
-        key=lambda x: (preferred.index(x) if x in preferred else 99, x),
-    )
-
-
-def _mianjifa_plot_one_methylation_type(
-        meth_type: str,
-        output_dir_records,
-        selected_dir: Path,
-        mut_dir: str,
-        wt_dir: str,
-        output_dir: Path,
-        cut_fraction: float):
-    """Plot signed raw MethDiff for q-significant, MethDiff-unfiltered sites."""
-    comparisons = []
-    for sort_key, info, out_dir in output_dir_records:
-        meth_dir = out_dir / meth_type
-        if not meth_dir.exists() or not meth_dir.is_dir():
-            comparisons.append({
-                "sort_key": sort_key,
-                "info": info,
-                "output_dir": out_dir,
-                "values": np.array([]),
-                "stats": {},
-                "error": f"missing {meth_type} folder",
-            })
-            continue
-        try:
-            qsig_sites, source_stats = _mianjifa_load_q_significant_sites_from_fdr(
-                meth_dir
-            )
-            values, raw_stats = _mianjifa_calculate_methdiff_from_raw(
-                selected_dir=selected_dir,
-                mut_dir=mut_dir,
-                wt_dir=wt_dir,
-                group1=info["group1"],
-                rep1=info["rep1"],
-                group2=info["group2"],
-                rep2=info["rep2"],
-                meth_type=meth_type,
-                dmp_sites=qsig_sites,
-            )
-            stats = {**source_stats, **raw_stats}
-            stats["area_input_site_count"] = len(qsig_sites)
-            comparisons.append({
-                "sort_key": sort_key,
-                "info": info,
-                "output_dir": out_dir,
-                "values": values,
-                "stats": stats,
-                "error": "",
-            })
-        except Exception as e:
-            comparisons.append({
-                "sort_key": sort_key,
-                "info": info,
-                "output_dir": out_dir,
-                "values": np.array([]),
-                "stats": {},
-                "error": str(e),
-            })
-
-    comparisons = sorted(comparisons, key=lambda x: x["sort_key"])
-    n = len(comparisons)
-    nrows, ncols = _mianjifa_choose_grid(n)
-    fig_width = max(6 * ncols, 10)
-    fig_height = max(5 * nrows, 6)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(fig_width, fig_height))
-    axes_flat = np.array(axes).reshape(-1)
-    summary_records = []
-
-    for ax, comp in zip(axes_flat, comparisons):
-        info = comp["info"]
-        title = f"{info['label']}\n{comp['output_dir'].name}"
-        if comp["error"]:
-            ax.text(
-                0.5, 0.5, comp["error"], ha="center", va="center",
-                transform=ax.transAxes, fontsize=8,
-            )
-            ax.set_title(title, fontsize=10)
-            ax.set_xlim(AUTO_METHDIFF_X_MIN, AUTO_METHDIFF_X_MAX)
-            ax.set_xlabel("MethDiff")
-            ax.set_ylabel("Frequency")
-            plot_stats = {
-                "n": 0,
-                "left_threshold": None,
-                "right_threshold": None,
-                "left_total_area": 0,
-                "right_total_area": 0,
-                "left_target_area": 0,
-                "right_target_area": 0,
-            }
-        else:
-            plot_stats = _mianjifa_plot_one_comparison_on_ax(
-                ax, comp["values"], title, cut_fraction=cut_fraction
-            )
-
-        left_abs = np.nan
-        right_abs = np.nan
-        if plot_stats.get("left_threshold") is not None:
-            left_abs = abs(float(plot_stats["left_threshold"]))
-        if plot_stats.get("right_threshold") is not None:
-            right_abs = abs(float(plot_stats["right_threshold"]))
-        side_values = [
-            v for v in [left_abs, right_abs] if np.isfinite(v)
-        ]
-        pair_abs_threshold = (
-            float(np.mean(side_values)) if side_values else np.nan
-        )
-
-        record = {
-            "methylation_type": meth_type,
-            "output_folder": comp["output_dir"].name,
-            "comparison": info["label"],
-            "group1": info["group1"],
-            "rep1": info["rep1"],
-            "group2": info["group2"],
-            "rep2": info["rep2"],
-            "methdiff_definition": (
-                f"{info['group1']}{info['rep1']} - "
-                f"{info['group2']}{info['rep2']}"
-            ),
-            "error": comp["error"],
-            "left_abs_threshold": left_abs,
-            "right_abs_threshold": right_abs,
-            "pair_abs_threshold_mean_lr": pair_abs_threshold,
-            **comp.get("stats", {}),
-            **plot_stats,
-        }
-        summary_records.append(record)
-
-    for ax in axes_flat[len(comparisons):]:
-        ax.axis("off")
-
-    fig.suptitle(
-        f"{selected_dir.name} | {meth_type} | {n} output comparisons | "
-        f"q-significant sites without MethDiff prefilter | raw signed MethDiff | "
-        f"cut {cut_fraction * 100:.2f}% histogram area from 0",
-        fontsize=15,
-    )
-    legend_items = [
-        Patch(
-            facecolor=AUTO_METHDIFF_COLOR_NORMAL,
-            edgecolor="black",
-            label="Retained area",
-        ),
-        Patch(
-            facecolor=AUTO_METHDIFF_COLOR_CUT,
-            edgecolor="black",
-            label=f"Cut {cut_fraction * 100:.2f}% area from 0",
-        ),
-        Line2D(
-            [0], [0], color=AUTO_METHDIFF_COLOR_ZERO_LINE,
-            lw=1.5, linestyle="-", label="x = 0",
-        ),
-        Line2D(
-            [0], [0], color=AUTO_METHDIFF_COLOR_THRESHOLD,
-            lw=1.5, linestyle="--", label="Cut threshold",
-        ),
-    ]
-    fig.legend(
-        handles=legend_items, loc="upper center", ncol=4,
-        frameon=True, bbox_to_anchor=(0.5, 0.97),
-    )
-    plt.tight_layout(rect=[0, 0, 1, 0.92])
-    output_png = output_dir / (
-        f"{_mianjifa_safe_name(selected_dir.name)}_"
-        f"{_mianjifa_safe_name(meth_type)}_"
-        f"{n}outputs_Qsig_rawMethDiff_area{cut_fraction * 100:.2f}pct.png"
-    )
-    plt.savefig(output_png, dpi=300)
-    plt.close()
-    print(f"Saved auto-methdiff plot: {output_png}")
-    return summary_records
-
-
-def _mianjifa_aggregate_threshold(summary_df: pd.DataFrame, aggregate: str, fallback: float):
-    """Aggregate left/right plot thresholds into one global abs(methdiff) threshold."""
-    candidates = []
-    for col in ["left_abs_threshold", "right_abs_threshold"]:
-        if col in summary_df.columns:
-            values = pd.to_numeric(summary_df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-            candidates.extend([float(v) for v in values if float(v) > 0])
-    if not candidates:
-        return float(fallback), 0, "fallback_no_valid_side_thresholds"
-    arr = np.asarray(candidates, dtype=float)
-    aggregate = str(aggregate).lower()
-    if aggregate == "mean":
-        threshold = float(np.mean(arr))
-    elif aggregate == "max":
-        threshold = float(np.max(arr))
-    elif aggregate == "min":
-        threshold = float(np.min(arr))
-    else:
-        threshold = float(np.median(arr))
-        aggregate = "median"
-    threshold = max(0.0, min(1.0, threshold))
-    return threshold, int(len(arr)), f"ok_{aggregate}"
-
-
-def estimate_mianjifa_auto_methdiff_threshold(
-        mut_dir,
-        wt_dir,
-        work_dir=".",
-        cut_fraction=0.05,
-        fallback=0.3,
-        aggregate="median",
-        output_dir="and_output/auto_methdiff_thresholds",
-        report_only=False):
-    """Estimate one global abs threshold from q-significant sites before any MethDiff filtering."""
-    selected_dir = Path(work_dir)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    AUTO_METHDIFF_RAW_CACHE.clear()
-
-    output_dir_records = _mianjifa_find_output_dirs(selected_dir)
-    if not output_dir_records:
-        summary_df = pd.DataFrame([{
-            "status": "fallback_no_output_dirs",
-            "auto_methdiff_threshold": np.nan,
-            "used_methdiff_threshold": float(fallback),
-            "fallback_methdiff": float(fallback),
-            "cut_fraction": float(cut_fraction),
-            "aggregate": aggregate,
-            "report_only": bool(report_only),
-        }])
-        out_file = output_path / "mianjifa_auto_methdiff_threshold_summary.tsv"
-        summary_df.to_csv(out_file, sep="\t", index=False)
-        print(f"Auto methdiff threshold estimation failed: no output_*_* folders found; falling back to {fallback}")
-        print(f"Auto methdiff diagnostic table saved to: {out_file}")
-        return float(fallback), summary_df
-
-    meth_types = _mianjifa_collect_methylation_types(output_dir_records)
-    if not meth_types:
-        summary_df = pd.DataFrame([{
-            "status": "fallback_no_methylation_type_dirs_with_fdr",
-            "auto_methdiff_threshold": np.nan,
-            "used_methdiff_threshold": float(fallback),
-            "fallback_methdiff": float(fallback),
-            "cut_fraction": float(cut_fraction),
-            "aggregate": aggregate,
-            "report_only": bool(report_only),
-        }])
-        out_file = output_path / "mianjifa_auto_methdiff_threshold_summary.tsv"
-        summary_df.to_csv(out_file, sep="\t", index=False)
-        print(f"Auto methdiff threshold estimation failed: no methylation-context directories with complete FDR tables were found; falling back to {fallback}")
-        print(f"Auto methdiff diagnostic table saved to: {out_file}")
-        return float(fallback), summary_df
-
-    print("\nEstimating the auto-methdiff threshold: mianjifa q-significant raw MethDiff area-cut method")
-    print(f"  work_dir = {selected_dir}")
-    print(f"  mut_dir = {mut_dir}")
-    print(f"  wt_dir = {wt_dir}")
-    print(f"  cut_fraction = {cut_fraction}")
-    print(f"  aggregate = {aggregate}")
-
-    all_summary = []
-    for meth_type in meth_types:
-        print(f"\nProcessing auto-methdiff methylation context: {meth_type}")
-        records = _mianjifa_plot_one_methylation_type(
-            meth_type=meth_type,
-            output_dir_records=output_dir_records,
-            selected_dir=selected_dir,
-            mut_dir=mut_dir,
-            wt_dir=wt_dir,
-            output_dir=output_path,
-            cut_fraction=float(cut_fraction),
-        )
-        all_summary.extend(records)
-
-    summary_df = pd.DataFrame(all_summary)
-    threshold, n_threshold_values, status = _mianjifa_aggregate_threshold(
-        summary_df=summary_df,
-        aggregate=aggregate,
-        fallback=float(fallback),
-    )
-
-    summary_df["auto_methdiff_global_status"] = status
-    summary_df["auto_methdiff_global_threshold"] = threshold if status.startswith("ok") else np.nan
-    summary_df["used_methdiff_threshold"] = threshold
-    summary_df["fallback_methdiff"] = float(fallback)
-    summary_df["cut_fraction"] = float(cut_fraction)
-    summary_df["aggregate"] = aggregate
-    summary_df["n_threshold_values_for_aggregate"] = n_threshold_values
-    summary_df["report_only"] = bool(report_only)
-
-    summary_tsv = output_path / "mianjifa_auto_methdiff_threshold_summary.tsv"
-    summary_csv = output_path / "mianjifa_auto_methdiff_threshold_summary.csv"
-    summary_df.to_csv(summary_tsv, sep="\t", index=False)
-    summary_df.to_csv(summary_csv, index=False, encoding="utf-8-sig")
-
-    aggregate_df = pd.DataFrame([{
-        "method": "mianjifa_Qsig_rawMethDiff_area_cut",
-        "status": status,
-        "auto_methdiff_threshold": threshold if status.startswith("ok") else np.nan,
-        "used_methdiff_threshold": threshold,
-        "fallback_methdiff": float(fallback),
-        "cut_fraction": float(cut_fraction),
-        "aggregate": aggregate,
-        "n_threshold_values_for_aggregate": n_threshold_values,
-        "report_only": bool(report_only),
-    }])
-    aggregate_tsv = output_path / "mianjifa_auto_methdiff_threshold_aggregate.tsv"
-    aggregate_df.to_csv(aggregate_tsv, sep="\t", index=False)
-
-    print(f"Auto methdiff diagnostic table saved to: {summary_tsv}")
-    print(f"Auto methdiff aggregate-threshold table saved to: {aggregate_tsv}")
-    print(f"mianjifa auto-methdiff global abs threshold = {threshold:.6g} ({status})")
-    return threshold, summary_df
-
+    return re.sub(r"^chr", "", chr_value, flags=re.IGNORECASE)
 
 
 def estimate_auto_qvalue_threshold_twostep(
@@ -1608,6 +796,8 @@ def _estimate_vote_required_count_from_counts(counts, total_groups, allow_trunca
     valley between the two components; if the valley cannot be found, use the
     Otsu-style between-class variance fallback. For DMR, the historical module
     additionally adjusts truncated distributions by lowering the threshold by 1.
+    If GMM fitting or density scoring raises an exception, the configured
+    --vote-threshold is used as the fail-safe required count.
     """
     total_groups = int(total_groups)
     fallback = _auto_vote_fallback_required_count(total_groups)
@@ -1653,44 +843,51 @@ def _estimate_vote_required_count_from_counts(counts, total_groups, allow_trunca
             "n_candidates": 0,
         }
 
-    gmm = GaussianMixture(n_components=2, random_state=42, max_iter=500)
-    gmm.fit(x.reshape(-1, 1))
-    means = np.sort(gmm.means_.flatten())
+    try:
+        gmm = GaussianMixture(n_components=2, random_state=42, max_iter=500)
+        gmm.fit(x.reshape(-1, 1))
+        means = np.sort(gmm.means_.flatten())
 
-    x_plot = np.linspace(0.5, total_groups + 0.5, 500)
-    pdf = np.exp(gmm.score_samples(x_plot.reshape(-1, 1)))
+        x_plot = np.linspace(0.5, total_groups + 0.5, 500)
+        pdf = np.exp(gmm.score_samples(x_plot.reshape(-1, 1)))
 
-    search = (x_plot > means[0]) & (x_plot < means[1])
-    if np.any(search):
-        valley_idx = int(np.argmin(pdf[search]))
-        valley_x = float(x_plot[search][valley_idx])
-        best_t = int(np.ceil(valley_x))
-        method = "two_component_gmm_valley"
-    else:
-        total = counts.sum()
-        indices = np.arange(1, total_groups + 1)
-        sum_val = np.sum(indices * counts)
-        sumc = np.cumsum(counts)
-        weight0 = sumc / total
-        weight1 = 1 - weight0
-        mean0 = np.cumsum(indices * counts) / (sumc + 1e-10)
-        mean1 = (sum_val - np.cumsum(indices * counts)) / (total - sumc + 1e-10)
-        var_between = weight0 * weight1 * (mean0 - mean1) ** 2
-        best_t = int(np.argmax(var_between) + 1)
-        valley_x = float(best_t - 0.5)
-        method = "otsu_fallback"
+        search = (x_plot > means[0]) & (x_plot < means[1])
+        if np.any(search):
+            valley_idx = int(np.argmin(pdf[search]))
+            valley_x = float(x_plot[search][valley_idx])
+            best_t = int(np.ceil(valley_x))
+            method = "two_component_gmm_valley"
+        else:
+            total = counts.sum()
+            indices = np.arange(1, total_groups + 1)
+            sum_val = np.sum(indices * counts)
+            sumc = np.cumsum(counts)
+            weight0 = sumc / total
+            weight1 = 1 - weight0
+            mean0 = np.cumsum(indices * counts) / (sumc + 1e-10)
+            mean1 = (sum_val - np.cumsum(indices * counts)) / (total - sumc + 1e-10)
+            var_between = weight0 * weight1 * (mean0 - mean1) ** 2
+            best_t = int(np.argmax(var_between) + 1)
+            valley_x = float(best_t - 0.5)
+            method = "otsu_fallback"
 
-    status = "ok"
-    if allow_truncated_adjust:
-        half_limit = total_groups // 2
-        low_range_zero = all(counts.loc[i] == 0 for i in range(1, half_limit + 1))
-        if low_range_zero:
-            original_t = best_t
-            best_t = max(1, best_t - 1)
-            status = "ok_truncated_adjusted"
-            method = f"{method}_truncated_adjust_{original_t}_to_{best_t}"
+        status = "ok"
+        if allow_truncated_adjust:
+            half_limit = total_groups // 2
+            low_range_zero = all(counts.loc[i] == 0 for i in range(1, half_limit + 1))
+            if low_range_zero:
+                original_t = best_t
+                best_t = max(1, best_t - 1)
+                status = "ok_truncated_adjusted"
+                method = f"{method}_truncated_adjust_{original_t}_to_{best_t}"
 
-    best_t = max(1, min(int(best_t), total_groups))
+        best_t = max(1, min(int(best_t), total_groups))
+    except Exception:
+        best_t = int(fallback)
+        valley_x = np.nan
+        means = np.array([np.nan, np.nan])
+        status = "fallback_gmm_exception"
+        method = "fallback_vote_threshold"
     return best_t, {
         "status": status,
         "method": method,
@@ -1762,9 +959,8 @@ def compute_dmp_vote_thresholds(
       1) Qvalue <= that row/pair's Qvalue_Threshold_Used (or context fallback);
       2) abs(MethDiff) >= meth_diff_threshold.
 
-    Therefore, when mianjifa auto-methdiff is enabled, auto-vote is calculated
-    from the sites remaining after the newly estimated MethDiff threshold, not
-    from stale pairwise DMP files generated before that threshold was known.
+    This keeps auto-vote support construction consistent with the same DMP
+    MethDiff threshold used by pairwise and final common-DMP calling.
     """
     if base_dir is None:
         base_path = Path(__file__).parent
@@ -1802,7 +998,7 @@ def compute_dmp_vote_thresholds(
         chrom_filter = None
     else:
         chrom_filter = {
-            _mianjifa_normalize_chr(c).lower() for c in chromosomes
+            _normalize_chr_label(c).lower() for c in chromosomes
         }
 
     contexts = ["CpG", "CHH", "CHG"]
@@ -1878,7 +1074,7 @@ def compute_dmp_vote_thresholds(
                 ["Chromosome", "Position", "Pvalue"],
             ].copy()
             selected["chromosome"] = selected["Chromosome"].map(
-                lambda value: "chr" + _mianjifa_normalize_chr(value)
+                lambda value: "chr" + _normalize_chr_label(value)
             )
             selected["position"] = pd.to_numeric(
                 selected["Position"], errors="coerce"
@@ -1894,7 +1090,7 @@ def compute_dmp_vote_thresholds(
             if chrom_filter is not None:
                 selected = selected[
                     selected["chromosome"].map(
-                        lambda x: _mianjifa_normalize_chr(x).lower()
+                        lambda x: _normalize_chr_label(x).lower()
                     ).isin(chrom_filter)
                 ]
 
@@ -2023,38 +1219,52 @@ def compute_dmp_vote_thresholds(
             x_plot = None
             pdf = None
         else:
-            gmm = GaussianMixture(
-                n_components=2, random_state=42, max_iter=500
-            )
-            gmm.fit(x.reshape(-1, 1))
-            means = np.sort(gmm.means_.flatten())
+            try:
+                gmm = GaussianMixture(
+                    n_components=2, random_state=42, max_iter=500
+                )
+                gmm.fit(x.reshape(-1, 1))
+                means = np.sort(gmm.means_.flatten())
 
-            x_plot = np.linspace(0.5, N + 0.5, 3000)
-            pdf = np.exp(gmm.score_samples(x_plot.reshape(-1, 1)))
-            search = (x_plot > means[0]) & (x_plot < means[1])
-            if np.any(search):
-                valley_idx = np.argmin(pdf[search])
-                valley_x = float(x_plot[search][valley_idx])
-                best_t = int(np.ceil(valley_x))
-                method = "two_component_gmm_valley"
-                status = "ok"
-            else:
-                total = counts.sum()
-                indices = np.arange(1, N + 1)
-                sum_val = np.sum(indices * counts)
-                sumc = np.cumsum(counts)
-                weight0 = sumc / total
-                weight1 = 1 - weight0
-                mean0 = np.cumsum(indices * counts) / (sumc + 1e-10)
-                mean1 = (
-                    sum_val - np.cumsum(indices * counts)
-                ) / (total - sumc + 1e-10)
-                var_between = weight0 * weight1 * (mean0 - mean1) ** 2
-                best_t = int(np.argmax(var_between) + 1)
-                valley_x = float(best_t - 0.5)
-                method = "otsu_fallback"
-                status = "ok"
-            best_t = max(1, min(int(best_t), total_groups))
+                x_plot = np.linspace(0.5, N + 0.5, 3000)
+                pdf = np.exp(gmm.score_samples(x_plot.reshape(-1, 1)))
+                search = (x_plot > means[0]) & (x_plot < means[1])
+                if np.any(search):
+                    valley_idx = np.argmin(pdf[search])
+                    valley_x = float(x_plot[search][valley_idx])
+                    best_t = int(np.ceil(valley_x))
+                    method = "two_component_gmm_valley"
+                    status = "ok"
+                else:
+                    total = counts.sum()
+                    indices = np.arange(1, N + 1)
+                    sum_val = np.sum(indices * counts)
+                    sumc = np.cumsum(counts)
+                    weight0 = sumc / total
+                    weight1 = 1 - weight0
+                    mean0 = np.cumsum(indices * counts) / (sumc + 1e-10)
+                    mean1 = (
+                        sum_val - np.cumsum(indices * counts)
+                    ) / (total - sumc + 1e-10)
+                    var_between = weight0 * weight1 * (mean0 - mean1) ** 2
+                    best_t = int(np.argmax(var_between) + 1)
+                    valley_x = float(best_t - 0.5)
+                    method = "otsu_fallback"
+                    status = "ok"
+                best_t = max(1, min(int(best_t), total_groups))
+            except Exception as exc:
+                best_t = int(fallback)
+                valley_x = np.nan
+                means = np.array([np.nan, np.nan])
+                method = "fallback_vote_threshold"
+                status = "fallback_gmm_exception"
+                x_plot = None
+                pdf = None
+                print(
+                    f"  [WARN] {ctx} GMM vote-threshold fitting failed: "
+                    f"{type(exc).__name__}: {exc}; "
+                    f"using --vote-threshold fallback t={best_t}"
+                )
 
         img_file = (
             plot_path /
@@ -2159,11 +1369,19 @@ def compute_dmp_vote_thresholds(
         for i in range(1, total_groups + 1):
             record[f"count_{i}"] = int(counts_full.loc[i])
         records.append(record)
-        print(
-            f"  [OK] {ctx}: recommended threshold = {best_t};"
-            f"MethDifffiltering threshold={meth_diff_threshold:.6g};"
-            f"plot={img_file}"
-        )
+        if status == "fallback_gmm_exception":
+            print(
+                f"  [FALLBACK] {ctx}: GMM failed; "
+                f"using --vote-threshold required count = {best_t}; "
+                f"MethDiff filtering threshold={meth_diff_threshold:.6g}; "
+                f"plot={img_file}"
+            )
+        else:
+            print(
+                f"  [OK] {ctx}: recommended threshold = {best_t};"
+                f"MethDifffiltering threshold={meth_diff_threshold:.6g};"
+                f"plot={img_file}"
+            )
 
     _write_auto_vote_summary(
         records, str(plot_path), "DMP_vote_threshold_summary.tsv"
@@ -2189,13 +1407,15 @@ def compute_dmr_vote_thresholds(
     """
     Automatically read significant DMR files from m*n comparison groups under
     and_output/dmr_analysis_wt<wt>_mut<mut>/<context>/dmr_fisher_significant_*.txt.
-    DMRs with qvalue <= DMR_QVALUE_THRESHOLD are merged, support counts are calculated,
-    and a bimodal GMM is used to automatically select the DMR voting threshold.
+    DMRs passing both qvalue <= DMR_QVALUE_THRESHOLD and the configured regional
+    MethDiff threshold are merged, support counts are calculated, and a bimodal GMM
+    is used to automatically select the DMR voting threshold.
     The DMR support-count distribution plot and DMR_vote_threshold_summary.tsv are also saved.
 
     Special cases:
       1. Unimodal distribution: use the fallback required_count implied by the current --vote-threshold.
       2. Truncated distribution: if the low-support range has no data, decrease the GMM threshold by 1.
+      3. GMM exception: use the fallback required_count implied by the current --vote-threshold.
     """
     if base_dir is None:
         base_path = Path(__file__).parent
@@ -2268,6 +1488,21 @@ def compute_dmr_vote_thresholds(
 
                     if 'qvalue' in df.columns:
                         df = df[df['qvalue'] <= DMR_QVALUE_THRESHOLD].copy()
+
+                    # Recheck the regional effect-size threshold from aggregated reads.
+                    # This keeps auto-vote support construction consistent with final DMR calling,
+                    # including when the function is run on pre-existing result directories.
+                    required_count_cols = {
+                        'exp_methy_sum', 'exp_unmethy_sum',
+                        'wild_methy_sum', 'wild_unmethy_sum'
+                    }
+                    if DMR_METH_DIFF_THRESHOLD > 0 and required_count_cols.issubset(df.columns):
+                        exp_total = pd.to_numeric(df['exp_methy_sum'], errors='coerce') + pd.to_numeric(df['exp_unmethy_sum'], errors='coerce')
+                        wild_total = pd.to_numeric(df['wild_methy_sum'], errors='coerce') + pd.to_numeric(df['wild_unmethy_sum'], errors='coerce')
+                        exp_rate = pd.to_numeric(df['exp_methy_sum'], errors='coerce') / exp_total.replace(0, np.nan)
+                        wild_rate = pd.to_numeric(df['wild_methy_sum'], errors='coerce') / wild_total.replace(0, np.nan)
+                        regional_meth_diff = (exp_rate - wild_rate).abs()
+                        df = df[regional_meth_diff >= DMR_METH_DIFF_THRESHOLD].copy()
 
                     if df.empty:
                         continue
@@ -2405,50 +1640,64 @@ def compute_dmr_vote_thresholds(
             x_plot = None
             pdf = None
         else:
-            gmm = GaussianMixture(n_components=2, random_state=42, max_iter=500)
-            gmm.fit(x.reshape(-1, 1))
-            means = np.sort(gmm.means_.flatten())
+            try:
+                gmm = GaussianMixture(n_components=2, random_state=42, max_iter=500)
+                gmm.fit(x.reshape(-1, 1))
+                means = np.sort(gmm.means_.flatten())
 
-            x_plot = np.linspace(0.5, total_groups + 0.5, 3000)
-            pdf = np.exp(gmm.score_samples(x_plot.reshape(-1, 1)))
+                x_plot = np.linspace(0.5, total_groups + 0.5, 3000)
+                pdf = np.exp(gmm.score_samples(x_plot.reshape(-1, 1)))
 
-            search = (x_plot > means[0]) & (x_plot < means[1])
-            if np.any(search):
-                valley_idx = np.argmin(pdf[search])
-                valley_x = float(x_plot[search][valley_idx])
-                best_t = int(np.ceil(valley_x))
-                status = 'ok'
-                method = 'two_component_gmm_valley'
-            else:
-                total = counts.sum()
-                indices = np.arange(1, total_groups + 1)
-                sum_val = np.sum(indices * counts)
-                sumc = np.cumsum(counts)
-                weight0 = sumc / total
-                weight1 = 1 - weight0
-                mean0 = np.cumsum(indices * counts) / (sumc + 1e-10)
-                mean1 = (sum_val - np.cumsum(indices * counts)) / (total - sumc + 1e-10)
-                var_between = weight0 * weight1 * (mean0 - mean1) ** 2
-                best_t = int(np.argmax(var_between) + 1)
-                valley_x = float(best_t - 0.5)
-                status = 'ok'
-                method = 'otsu_fallback'
+                search = (x_plot > means[0]) & (x_plot < means[1])
+                if np.any(search):
+                    valley_idx = np.argmin(pdf[search])
+                    valley_x = float(x_plot[search][valley_idx])
+                    best_t = int(np.ceil(valley_x))
+                    status = 'ok'
+                    method = 'two_component_gmm_valley'
+                else:
+                    total = counts.sum()
+                    indices = np.arange(1, total_groups + 1)
+                    sum_val = np.sum(indices * counts)
+                    sumc = np.cumsum(counts)
+                    weight0 = sumc / total
+                    weight1 = 1 - weight0
+                    mean0 = np.cumsum(indices * counts) / (sumc + 1e-10)
+                    mean1 = (sum_val - np.cumsum(indices * counts)) / (total - sumc + 1e-10)
+                    var_between = weight0 * weight1 * (mean0 - mean1) ** 2
+                    best_t = int(np.argmax(var_between) + 1)
+                    valley_x = float(best_t - 0.5)
+                    status = 'ok'
+                    method = 'otsu_fallback'
 
-            # ========== Special handling: truncated distribution ==========
-            half_limit = total_groups // 2
-            low_range_zero = all(counts.loc[i] == 0 for i in range(1, half_limit + 1))
+                # ========== Special handling: truncated distribution ==========
+                half_limit = total_groups // 2
+                low_range_zero = all(counts.loc[i] == 0 for i in range(1, half_limit + 1))
 
-            if low_range_zero:
-                original_t = int(best_t)
-                best_t = max(1, int(best_t) - 1)
-                status = 'ok_truncated_adjusted'
-                method = f'{method}_truncated_adjust_{original_t}_to_{best_t}'
+                if low_range_zero:
+                    original_t = int(best_t)
+                    best_t = max(1, int(best_t) - 1)
+                    status = 'ok_truncated_adjusted'
+                    method = f'{method}_truncated_adjust_{original_t}_to_{best_t}'
+                    print(
+                        f"  [WARN] Detected a truncated distribution: support counts from 1 to {half_limit} have no DMR,"
+                        f"adjust threshold from {original_t} to {best_t}"
+                    )
+
+                best_t = max(1, min(int(best_t), total_groups))
+            except Exception as exc:
+                best_t = int(fallback)
+                valley_x = np.nan
+                means = np.array([np.nan, np.nan])
+                status = 'fallback_gmm_exception'
+                method = 'fallback_vote_threshold'
+                x_plot = None
+                pdf = None
                 print(
-                    f"  [WARN] Detected a truncated distribution: support counts from 1 to {half_limit} have no DMR,"
-                    f"adjust threshold from {original_t} to {best_t}"
+                    f"  [WARN] {ctx} GMM vote-threshold fitting failed: "
+                    f"{type(exc).__name__}: {exc}; "
+                    f"using --vote-threshold fallback t={best_t}"
                 )
-
-            best_t = max(1, min(int(best_t), total_groups))
 
         # ========== Plotting ==========
         img_file = plot_path / f"DMR_{ctx}_vote_support_distribution_{total_groups}_groups.jpeg"
@@ -2561,7 +1810,14 @@ def compute_dmr_vote_thresholds(
 
         records.append(record)
 
-        print(f"  [OK] {ctx}: recommended threshold = {best_t}; plot saved to  {img_file}")
+        if status == 'fallback_gmm_exception':
+            print(
+                f"  [FALLBACK] {ctx}: GMM failed; "
+                f"using --vote-threshold required count = {best_t}; "
+                f"plot saved to {img_file}"
+            )
+        else:
+            print(f"  [OK] {ctx}: recommended threshold = {best_t}; plot saved to  {img_file}")
 
     _write_auto_vote_summary(records, str(plot_path), 'DMR_vote_threshold_summary.tsv')
     return thresholds
@@ -2601,7 +1857,7 @@ DmrRecord = namedtuple('DmrRecord', ['exp_methy', 'exp_unmethy', 'wild_methy', '
 
 def _apply_worker_config(config):
     """Apply CLI-derived global settings inside a worker process."""
-    global DMR_QVALUE_THRESHOLD, VOTE_THRESHOLD, DMR_ENGINE
+    global DMR_QVALUE_THRESHOLD, DMR_METH_DIFF_THRESHOLD, VOTE_THRESHOLD, DMR_ENGINE
     global AUTO_DMP_VOTE_THRESHOLD, AUTO_DMR_VOTE_THRESHOLD, AUTO_VOTE_THRESHOLD_REPORT_ONLY
     global AUTO_DMP_VOTE_THRESHOLDS, AUTO_DMR_VOTE_THRESHOLDS
     global AUTO_QVALUE_TWOSTEP, AUTO_QVALUE_REPORT_ONLY
@@ -2612,6 +1868,7 @@ def _apply_worker_config(config):
         return
     DMP_QVALUE_THRESHOLDS.update(config.get("dmp_qvalue_thresholds", {}))
     DMR_QVALUE_THRESHOLD = config.get("dmr_qvalue_threshold", DMR_QVALUE_THRESHOLD)
+    DMR_METH_DIFF_THRESHOLD = config.get("dmr_meth_diff_threshold", DMR_METH_DIFF_THRESHOLD)
     VOTE_THRESHOLD = config.get("vote_threshold", VOTE_THRESHOLD)
     AUTO_DMP_VOTE_THRESHOLD = config.get("auto_dmp_vote_threshold", AUTO_DMP_VOTE_THRESHOLD)
     AUTO_DMR_VOTE_THRESHOLD = config.get("auto_dmr_vote_threshold", AUTO_DMR_VOTE_THRESHOLD)
@@ -2781,6 +2038,7 @@ def _build_parallel_config():
     return {
         "dmp_qvalue_thresholds": dict(DMP_QVALUE_THRESHOLDS),
         "dmr_qvalue_threshold": DMR_QVALUE_THRESHOLD,
+        "dmr_meth_diff_threshold": DMR_METH_DIFF_THRESHOLD,
         "vote_threshold": VOTE_THRESHOLD,
         "auto_dmp_vote_threshold": AUTO_DMP_VOTE_THRESHOLD,
         "auto_dmr_vote_threshold": AUTO_DMR_VOTE_THRESHOLD,
@@ -2887,8 +2145,17 @@ def generate_final_significant_dmr(dmr_data_dict, methylation_type, output_dir,m
         for dmr_key, data_list in chr_dmr_dict.items():
             start, end = dmr_key
 
-            # Count significant calls
-            sig_count = sum(1 for item in data_list if item.qvalue <= DMR_QVALUE_THRESHOLD)
+            # Count pairwise DMR supports. A pair supports this region only when
+            # both its q-value and its absolute regional methylation difference pass.
+            supporting_items = [
+                item for item in data_list
+                if item.qvalue <= DMR_QVALUE_THRESHOLD
+                and calc_meth_diff(
+                    item.exp_methy, item.exp_unmethy,
+                    item.wild_methy, item.wild_unmethy
+                ) >= DMR_METH_DIFF_THRESHOLD
+            ]
+            sig_count = len(supporting_items)
             total_count = len(data_list)
 
             # Decision
@@ -2903,7 +2170,7 @@ def generate_final_significant_dmr(dmr_data_dict, methylation_type, output_dir,m
             avg_wild_m = np.mean([item.wild_methy for item in data_list])
             avg_wild_u = np.mean([item.wild_unmethy for item in data_list])
 
-            filtered_values = [item.qvalue for item in data_list if item.qvalue <= DMR_QVALUE_THRESHOLD]
+            filtered_values = [item.qvalue for item in supporting_items]
             avg_qvalue = np.mean(filtered_values) if filtered_values else 1
 
             # Determine direction by majority voting
@@ -3424,21 +2691,35 @@ def summarize_dmr_methylation(methy_dir, replicate_x, replicate_y, file1_path, f
                 f.write(f"{start}\t{end}\t{exp_m}\t{exp_u}\t{wild_m}\t{wild_u}\t{p_out:.6g}\t{q_out:.6g}\t{direction}\n")
         print(f"      {chrom} Fisher + FDR + direction completed -> {fisher_file}")
 
-        # Significant results using the configurable DMR q-value threshold
+        # Significant results using both configurable DMR q-value and regional
+        # methylation-difference thresholds. Regional MethDiff is calculated from
+        # the same aggregated read counts used by the DMR Fisher test.
         sig_rows = [
             row for row in chrom_data_dict[chrom]
-            if not np.isnan(row[7]) and row[7] <= DMR_QVALUE_THRESHOLD
+            if not np.isnan(row[7])
+            and row[7] <= DMR_QVALUE_THRESHOLD
+            and calc_meth_diff(row[2], row[3], row[4], row[5]) >= DMR_METH_DIFF_THRESHOLD
         ]
+        sig_file = os.path.join(methy_dir, f"dmr_fisher_significant_{chrom}.txt")
         if sig_rows:
-            sig_file = os.path.join(methy_dir, f"dmr_fisher_significant_{chrom}.txt")
             with open(sig_file, 'w') as f:
                 f.write("DMR_start\tDMR_end\texp_methy_sum\texp_unmethy_sum\twild_methy_sum\twild_unmethy_sum\tpvalue\tqvalue\tdirection\n")
                 for row in sig_rows:
                     start, end, exp_m, exp_u, wild_m, wild_u, pval, qval, direction = row
                     f.write(f"{start}\t{end}\t{exp_m}\t{exp_u}\t{wild_m}\t{wild_u}\t{pval:.6g}\t{qval:.6g}\t{direction}\n")
-            print(f"        -> significant DMR (q<={DMR_QVALUE_THRESHOLD}): {sig_file}")
+            print(
+                f"        -> significant DMR "
+                f"(q<={DMR_QVALUE_THRESHOLD}, abs(MethDiff)>={DMR_METH_DIFF_THRESHOLD}): {sig_file}"
+            )
         else:
-            print(f"        -> {chrom} has no significant DMRs (q<={DMR_QVALUE_THRESHOLD})")
+            # Avoid carrying a stale significant-DMR file into auto-vote when
+            # rerunning the same directory with a stricter threshold.
+            if os.path.exists(sig_file):
+                os.remove(sig_file)
+            print(
+                f"        -> {chrom} has no significant DMRs "
+                f"(q<={DMR_QVALUE_THRESHOLD}, abs(MethDiff)>={DMR_METH_DIFF_THRESHOLD})"
+            )
 
     print("    DMR methylation analysis completed.")
 
@@ -4177,11 +3458,35 @@ def scan_all_files_for_chr_mapping(m, n, dir1, dir2):
 
 def single_newtoboth(filepath1, output_dir, num1, chr_series):
     """
-    Accelerated single-file conversion for newtoboth.
-    The original output format is preserved:
-    each methylation type outputs one bothMeUnme_diffChromo_NOREPEATED file,
-    and each chromosome occupies three columns: Position, methylated reads, and unmethylated reads.
+    Convert one raw five-column methylation file into low-memory bothMeUnme
+    matrix files without relying on external operating-system sort commands.
+
+    Input/output contract is unchanged:
+      input columns:
+        chromosome, position, methylated_reads, unmethylated_reads, context
+      output files:
+        {num1}-bothMeUnme_diffChromo_NOREPEATED_methy_sites_{context}.txt
+      output layout:
+        each chromosome occupies three columns:
+        position, methylated_reads, unmethylated_reads;
+        shorter chromosome columns are padded with zeros.
+
+    Implementation:
+      1. Read the raw file in chunks.
+      2. Normalize chromosomes and contexts.
+      3. Stable-sort each chunk by context, chromosome, and position.
+      4. Write one sorted run file per chunk/context/chromosome.
+      5. Merge sorted run files with a pure-Python stable k-way merge.
+      6. Write the final matrix in row blocks.
+
+    The implementation is cross-platform and does not require GNU sort.
+
+    Optional environment variables only control memory/I/O granularity:
+      MULTIDMPCALLER_NEWTOBOTH_CHUNKSIZE   default 1000000
+      MULTIDMPCALLER_NEWTOBOTH_BLOCK_ROWS  default 100000
     """
+    import heapq
+    import tempfile
 
     col_names = [
         "Chromosome_Label",
@@ -4191,82 +3496,313 @@ def single_newtoboth(filepath1, output_dir, num1, chr_series):
         "Methylation_Context",
     ]
 
-    df = pd.read_csv(
-        filepath1,
-        sep=r"\s+",
-        header=None,
-        names=col_names,
-        dtype={
-            "Chromosome_Label": "string",
-            "Site_Position": "int64",
-            "Methylated_Reads": "int32",
-            "Unmethylated_Reads": "int32",
-            "Methylation_Context": "string",
-        },
+    def _positive_int_from_env(name, default):
+        raw = os.environ.get(name, str(default))
+        try:
+            value = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be a positive integer; received {raw!r}") from exc
+        if value <= 0:
+            raise ValueError(f"{name} must be a positive integer; received {value}")
+        return value
+
+    chunksize = _positive_int_from_env(
+        "MULTIDMPCALLER_NEWTOBOTH_CHUNKSIZE", 1_000_000
+    )
+    block_rows = _positive_int_from_env(
+        "MULTIDMPCALLER_NEWTOBOTH_BLOCK_ROWS", 100_000
     )
 
+    if not os.path.isfile(filepath1):
+        raise FileNotFoundError(f"Input methylation file does not exist: {filepath1}")
+    if not os.path.isdir(output_dir):
+        raise NotADirectoryError(f"Output directory does not exist: {output_dir}")
+
     chr_map = chr_series.to_dict()
-
-    df["Chromosome_Label"] = _normalize_chr_series(df["Chromosome_Label"]).map(chr_map)
-    df = df.dropna(subset=["Chromosome_Label"]).copy()
-    df["Chromosome_Label"] = df["Chromosome_Label"].astype(np.int32)
-
-    # Convert only true CG contexts to CpG to avoid unintended replacement in other strings
-    df["Methylation_Context"] = df["Methylation_Context"].replace({
-        "CG": "CpG",
-        "cg": "CpG",
-        "cG": "CpG",
-        "Cg": "CpG",
-    })
-
     chr_count = len(chr_series)
+    if chr_count <= 0:
+        raise ValueError("Chromosome mapping is empty; cannot build bothMeUnme files")
+
     out_dtype = np.int32
 
-    for methy_type, data_ind in df.groupby("Methylation_Context", sort=False):
-        if data_ind.empty:
-            continue
+    # key=(context, chromosome_index) -> [(chunk_index, run_path), ...]
+    run_paths = defaultdict(list)
+    # key=(context, chromosome_index) -> total number of rows
+    row_counts = defaultdict(int)
+    contexts_seen = set()
 
-        # Sort once to avoid sorting each chromosome separately
-        data_ind = data_ind.sort_values(
-            ["Chromosome_Label", "Site_Position"],
-            kind="mergesort",
+    tmp_root = tempfile.mkdtemp(
+        prefix=f"newtoboth_{num1}_",
+        dir=output_dir,
+    )
+
+    def normalize_context_series(series):
+        series = series.astype("string").str.strip()
+        return series.replace({
+            "CG": "CpG",
+            "cg": "CpG",
+            "cG": "CpG",
+            "Cg": "CpG",
+        })
+
+    def safe_context_name(context):
+        return re.sub(r"[^0-9A-Za-z_.-]+", "_", str(context))
+
+    def run_path_for(context, chr_num, chunk_index):
+        return os.path.join(
+            tmp_root,
+            f"{safe_context_name(context)}.chr{int(chr_num)}."
+            f"run{int(chunk_index):08d}.tmp",
         )
 
-        chr_blocks = []
-        mlen = 0
+    def iter_run_file(path):
+        """Yield integer triples from one already-sorted run file."""
+        with open(path, "r", encoding="utf-8", newline=None) as handle:
+            for line_number, line in enumerate(handle, 1):
+                stripped = line.rstrip("\r\n")
+                if not stripped:
+                    continue
+                parts = stripped.split("\t")
+                if len(parts) < 3:
+                    parts = stripped.split()
+                if len(parts) < 3:
+                    raise ValueError(
+                        f"Malformed temporary newtoboth row in {path}:{line_number}: "
+                        f"{stripped!r}"
+                    )
+                yield (
+                    int(float(parts[0])),
+                    int(float(parts[1])),
+                    int(float(parts[2])),
+                )
 
-        for chr_num, chr_df in data_ind.groupby("Chromosome_Label", sort=True):
-            arr = chr_df[
-                ["Site_Position", "Methylated_Reads", "Unmethylated_Reads"]
-            ].to_numpy(dtype=out_dtype, copy=True)
+    def stable_merge_runs(runs):
+        """
+        Merge sorted run files by numeric position.
 
-            chr_num = int(chr_num)
-            chr_blocks.append((chr_num, arr))
-            if arr.shape[0] > mlen:
-                mlen = arr.shape[0]
+        runs is ordered by chunk index. The heap key uses (position, run_rank),
+        so equal-position records from earlier input chunks remain before those
+        from later chunks. Within each run, the original stable chunk order is
+        preserved. This reproduces a stable whole-file position sort.
+        """
+        heap = []
+        iterators = []
+        push_serial = 0
 
-        if mlen == 0:
-            continue
+        for run_rank, (_chunk_index, path) in enumerate(runs):
+            iterator = iter(iter_run_file(path))
+            iterators.append(iterator)
+            try:
+                pos, meth, unmeth = next(iterator)
+            except StopIteration:
+                continue
+            heapq.heappush(
+                heap,
+                (pos, run_rank, push_serial, meth, unmeth, iterator),
+            )
+            push_serial += 1
 
-        output_matrix = np.zeros((mlen, chr_count * 3), dtype=out_dtype)
+        while heap:
+            pos, run_rank, _serial, meth, unmeth, iterator = heapq.heappop(heap)
+            yield pos, meth, unmeth
+            try:
+                next_pos, next_meth, next_unmeth = next(iterator)
+            except StopIteration:
+                continue
+            heapq.heappush(
+                heap,
+                (
+                    next_pos,
+                    run_rank,
+                    push_serial,
+                    next_meth,
+                    next_unmeth,
+                    iterator,
+                ),
+            )
+            push_serial += 1
 
-        # Key acceleration: assign whole chromosome blocks rather than row by row and chromosome by chromosome
-        for chr_num, arr in chr_blocks:
-            col_start = chr_num * 3
-            output_matrix[:arr.shape[0], col_start:col_start + 3] = arr
-
-        output_file = (
-            f"{num1}-bothMeUnme_diffChromo_NOREPEATED_"
-            f"methy_sites_{methy_type}.txt"
+    try:
+        print(
+            f"Low-memory cross-platform newtoboth: file={filepath1}, "
+            f"chunksize={chunksize}, block_rows={block_rows}, tmp={tmp_root}"
         )
-        output_path = os.path.join(output_dir, output_file)
 
-        pd.DataFrame(output_matrix).to_csv(
-            output_path,
-            sep="\t",
-            header=False,
-            index=False,
+        reader = pd.read_csv(
+            filepath1,
+            sep=r"\s+",
+            header=None,
+            names=col_names,
+            usecols=[0, 1, 2, 3, 4],
+            dtype={
+                "Chromosome_Label": "string",
+                "Site_Position": "int64",
+                "Methylated_Reads": "int32",
+                "Unmethylated_Reads": "int32",
+                "Methylation_Context": "string",
+            },
+            chunksize=chunksize,
         )
+
+        for chunk_index, chunk in enumerate(reader, 1):
+            if chunk.empty:
+                continue
+
+            chunk["Chromosome_Label"] = _normalize_chr_series(
+                chunk["Chromosome_Label"]
+            ).map(chr_map)
+            chunk = chunk.dropna(subset=["Chromosome_Label"]).copy()
+            if chunk.empty:
+                print(f"  chunk {chunk_index} contained no mapped chromosome rows")
+                continue
+
+            chunk["Chromosome_Label"] = chunk["Chromosome_Label"].astype(np.int32)
+            chunk["Methylation_Context"] = normalize_context_series(
+                chunk["Methylation_Context"]
+            )
+
+            # Stable chunk sort. Equal-key records retain their original order.
+            chunk = chunk.sort_values(
+                ["Methylation_Context", "Chromosome_Label", "Site_Position"],
+                kind="mergesort",
+            )
+
+            for (context, chr_num), group in chunk.groupby(
+                ["Methylation_Context", "Chromosome_Label"],
+                sort=False,
+            ):
+                if group.empty:
+                    continue
+
+                context = str(context)
+                chr_num = int(chr_num)
+                key = (context, chr_num)
+                path = run_path_for(context, chr_num, chunk_index)
+
+                group[
+                    ["Site_Position", "Methylated_Reads", "Unmethylated_Reads"]
+                ].to_csv(
+                    path,
+                    sep="\t",
+                    header=False,
+                    index=False,
+                    lineterminator="\n",
+                    encoding="utf-8",
+                )
+
+                run_paths[key].append((chunk_index, path))
+                row_counts[key] += int(len(group))
+                contexts_seen.add(context)
+
+            print(f"  chunk {chunk_index} completed, mapped_rows={len(chunk)}")
+
+        if not run_paths:
+            print(f"WARNING: {filepath1} produced no usable methylation records")
+            return
+
+        preferred_context_order = {"CpG": 0, "CHG": 1, "CHH": 2}
+        ordered_contexts = sorted(
+            contexts_seen,
+            key=lambda value: (
+                preferred_context_order.get(str(value), 99),
+                str(value),
+            ),
+        )
+
+        for context in ordered_contexts:
+            context_keys = [key for key in run_paths if key[0] == context]
+            if not context_keys:
+                continue
+
+            max_len = max(row_counts[key] for key in context_keys)
+            if max_len <= 0:
+                continue
+
+            output_file = (
+                f"{num1}-bothMeUnme_diffChromo_NOREPEATED_"
+                f"methy_sites_{context}.txt"
+            )
+            output_path = os.path.join(output_dir, output_file)
+            temporary_output_path = (
+                f"{output_path}.tmp.{os.getpid()}"
+            )
+
+            chromosome_iterators = {}
+            for chr_num in range(chr_count):
+                runs = sorted(
+                    run_paths.get((context, chr_num), []),
+                    key=lambda item: item[0],
+                )
+                chromosome_iterators[chr_num] = (
+                    iter(stable_merge_runs(runs)) if runs else None
+                )
+
+            try:
+                with open(
+                    temporary_output_path,
+                    "w",
+                    encoding="utf-8",
+                    newline="\n",
+                ) as output_handle:
+                    written_rows = 0
+                    while written_rows < max_len:
+                        current_block_rows = min(
+                            block_rows,
+                            max_len - written_rows,
+                        )
+                        block = np.zeros(
+                            (current_block_rows, chr_count * 3),
+                            dtype=out_dtype,
+                        )
+
+                        for chr_num in range(chr_count):
+                            iterator = chromosome_iterators[chr_num]
+                            if iterator is None:
+                                continue
+
+                            triples = []
+                            for _ in range(current_block_rows):
+                                try:
+                                    triples.append(next(iterator))
+                                except StopIteration:
+                                    chromosome_iterators[chr_num] = None
+                                    break
+
+                            if not triples:
+                                continue
+
+                            values = np.asarray(triples, dtype=out_dtype)
+                            column_start = chr_num * 3
+                            block[
+                                :values.shape[0],
+                                column_start:column_start + 3,
+                            ] = values
+
+                        np.savetxt(
+                            output_handle,
+                            block,
+                            fmt="%d",
+                            delimiter="\t",
+                        )
+                        written_rows += current_block_rows
+
+                os.replace(temporary_output_path, output_path)
+                print(
+                    f"  wrote {context}: {output_path}, "
+                    f"rows={max_len}, columns={chr_count * 3}"
+                )
+            except Exception:
+                try:
+                    if os.path.exists(temporary_output_path):
+                        os.remove(temporary_output_path)
+                except OSError:
+                    pass
+                raise
+
+    finally:
+        # Ordinary errors are cleaned automatically. A forceful process kill
+        # may still leave a newtoboth_* directory, which can be removed later.
+        shutil.rmtree(tmp_root, ignore_errors=True)
 
 def get_chr_name(chr_num, chr_series):
     """
@@ -4292,22 +3828,19 @@ def get_chr_name(chr_num, chr_series):
     return f"chr{chr_num}"
 
 def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
-    """Convert raw methylation files to bothMeUnme matrix files.
-
-    Parallel design:
-      1. Keep chromosome mapping construction serial to guarantee one shared chr_series.
-      2. If threads > 1, convert the m+n independent raw files concurrently.
-         Each worker writes only its own replicate-numbered output files, so filenames do not collide.
     """
-    # No need to check directory existence here because main already checked it
-    # Get the sorted Series mapping all unique chromosome labels across the two genotype directories to numeric indices
+    Convert all m+n raw methylation files to bothMeUnme matrix files.
+
+    Chromosome mapping is constructed once, serially, and shared by every
+    conversion task. The newtoboth stage directly uses the existing --threads
+    value; no separate worker environment variable is required.
+    """
     chr_series = scan_all_files_for_chr_mapping_fast(m, n, dir1, dir2)
     print(f"Mapping: {chr_series}")
 
     threads = max(1, int(threads))
     tasks = []
 
-    # Loop m+n times to process files from both genotype directories. Keep the original task order: all dir1 files first, then all dir2 files.
     for i in range(1, m + 1):
         filepath = os.path.join(dir1, f"{i}-{os.path.basename(dir1)}.txt")
         if not os.path.exists(filepath):
@@ -4334,31 +3867,58 @@ def newtoboth(m, n, dir1, dir2, threads=1, work_dir="."):
             "label": f"{os.path.basename(dir2)}{j}",
         })
 
+    if not tasks:
+        raise FileNotFoundError(
+            "No raw methylation input files were found for newtoboth conversion"
+        )
+
     if threads <= 1 or len(tasks) <= 1:
         for task in tasks:
             print(f"Processing file {task['filepath']}")
-            single_newtoboth(task["filepath"], task["output_dir"], task["num"], chr_series)
+            single_newtoboth(
+                task["filepath"],
+                task["output_dir"],
+                task["num"],
+                chr_series,
+            )
     else:
         max_workers = min(threads, len(tasks))
         log_dir = os.path.join(work_dir, "parallel_logs", "newtoboth")
         os.makedirs(log_dir, exist_ok=True)
+
         for task in tasks:
             safe_label = sanitize_filename(task["label"])
-            task["log_file"] = os.path.join(log_dir, f"newtoboth_{safe_label}.log")
+            task["log_file"] = os.path.join(
+                log_dir,
+                f"newtoboth_{safe_label}.log",
+            )
 
-        print(f"Enabled parallel newtoboth file conversion: workers={max_workers}, tasks={len(tasks)}")
+        print(
+            f"Enabled parallel newtoboth conversion: "
+            f"workers={max_workers}, tasks={len(tasks)}"
+        )
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            future_to_task = {executor.submit(_run_newtoboth_worker, task): task for task in tasks}
-            for idx, future in enumerate(as_completed(future_to_task), 1):
+            future_to_task = {
+                executor.submit(_run_newtoboth_worker, task): task
+                for task in tasks
+            }
+            for index, future in enumerate(
+                as_completed(future_to_task),
+                1,
+            ):
                 task = future_to_task[future]
                 try:
-                    res = future.result()
+                    result = future.result()
                     print(
-                        f"[DONE] newtoboth {idx}/{len(tasks)} {res['label']}: "
-                        f"{res['elapsed']:.2f}s, log={res['log_file']}"
+                        f"[DONE] newtoboth {index}/{len(tasks)} "
+                        f"{result['label']}: {result['elapsed']:.2f}s, "
+                        f"log={result['log_file']}"
                     )
-                except Exception as e:
-                    print(f"[FAILED] newtoboth {idx}/{len(tasks)} {task['label']}: {e}")
+                except Exception as exc:
+                    print(
+                        f"[FAILED] newtoboth {index}/{len(tasks)} "
+                        f"{task['label']}: {exc}"
+                    )
                     raise
 
     return chr_series
@@ -5296,248 +4856,6 @@ def generate_dmp_files(dir1,dir2,output_dir, replicate_x, replicate_y, fdr_thres
 
 
 
-def regenerate_pair_dmp_outputs_from_fdr(
-        m: int,
-        n: int,
-        dir1: str,
-        dir2: str,
-        work_dir: str = ".",
-        meth_diff_threshold: float = 0.0,
-        contexts=("CpG", "CHH", "CHG"),
-):
-    """Regenerate pairwise DMP/N-DMP/hyper/hypo files after auto-methdiff.
-
-    Pairwise DMP files are initially produced before the auto-methdiff threshold
-    is known.  When auto-methdiff changes the operational MethDiff threshold,
-    those files would otherwise remain stale even though auto-vote and final
-    common-DMP calling use the new threshold from the complete FDR tables.
-
-    This function rebuilds the user-facing pairwise partition directly from:
-      * complete FDR_corrected_results tables;
-      * each row's Qvalue_Threshold_Used (or the context fallback);
-      * the final MethDiff threshold;
-      * raw WT/MUT methylation rates for the hyper/hypo direction.
-
-    It also writes a validation summary.  A mismatch between the FDR universe
-    and the raw WT/MUT intersection is treated as an error rather than being
-    silently dropped.
-    """
-    work_path = Path(work_dir)
-    meth_diff_threshold = float(meth_diff_threshold)
-    summary_records = []
-
-    wt_dir = Path(dir2)
-    mut_dir = Path(dir1)
-    wt_group_name = wt_dir.name
-    mut_group_name = mut_dir.name
-
-    print(
-        "\nRebuilding Generating pairwise DMP output:"
-        f"q passes and abs(MethDiff)>={meth_diff_threshold:.6g}"
-    )
-
-    for mut_idx in range(1, int(m) + 1):
-        for wt_idx in range(1, int(n) + 1):
-            wt_file = _mianjifa_find_replicate_file(
-                wt_dir, wt_group_name, wt_idx
-            )
-            mut_file = _mianjifa_find_replicate_file(
-                mut_dir, mut_group_name, mut_idx
-            )
-
-            for ctx in contexts:
-                ctx_dir = (
-                    work_path /
-                    f"output_wt{wt_idx}_mut{mut_idx}" /
-                    ctx
-                )
-                if not ctx_dir.is_dir():
-                    continue
-
-                fdr_file = ctx_dir / (
-                    "FDR_corrected_results_"
-                    f"wt_replicate{wt_idx}_vs_mut_replicate{mut_idx}.txt"
-                )
-                if not fdr_file.exists():
-                    print(f"  [WARN] skipping; FDR file does not exist: {fdr_file}")
-                    continue
-
-                fdr = pd.read_csv(fdr_file, sep="\t")
-                required = {
-                    "Chromosome", "Methylation_Type", "Position",
-                    "Qvalue", "MethDiff",
-                }
-                missing = required - set(fdr.columns)
-                if missing:
-                    raise ValueError(
-                        f"{fdr_file} is missing required columns:{sorted(missing)}"
-                    )
-
-                frame = pd.DataFrame({
-                    "chr": fdr["Chromosome"].map(
-                        _mianjifa_normalize_chr
-                    ),
-                    "position": pd.to_numeric(
-                        fdr["Position"], errors="coerce"
-                    ),
-                    "qvalue": pd.to_numeric(
-                        fdr["Qvalue"], errors="coerce"
-                    ),
-                    "abs_methdiff_fdr": pd.to_numeric(
-                        fdr["MethDiff"], errors="coerce"
-                    ).abs(),
-                })
-                frame = frame.dropna(
-                    subset=["position", "qvalue", "abs_methdiff_fdr"]
-                ).copy()
-                frame["position"] = frame["position"].astype(np.int64)
-
-                fallback_q = float(get_dmp_threshold(ctx))
-                if "Qvalue_Threshold_Used" in fdr.columns:
-                    qthreshold = pd.to_numeric(
-                        fdr.loc[frame.index, "Qvalue_Threshold_Used"],
-                        errors="coerce",
-                    ).fillna(fallback_q)
-                    threshold_source = "Qvalue_Threshold_Used"
-                else:
-                    qthreshold = pd.Series(
-                        fallback_q, index=frame.index, dtype=float
-                    )
-                    threshold_source = "fixed_context_threshold"
-                frame["qthreshold"] = qthreshold.to_numpy(dtype=float)
-
-                wt_raw = _mianjifa_read_raw_methylation_file(wt_file, ctx)
-                mut_raw = _mianjifa_read_raw_methylation_file(mut_file, ctx)
-                wt_raw = wt_raw.rename(
-                    columns={"pos": "position", "meth_rate": "wt_rate"}
-                )[["chr", "position", "wt_rate"]]
-                mut_raw = mut_raw.rename(
-                    columns={"pos": "position", "meth_rate": "mut_rate"}
-                )[["chr", "position", "mut_rate"]]
-
-                merged = frame.merge(
-                    wt_raw,
-                    on=["chr", "position"],
-                    how="left",
-                    validate="one_to_one",
-                ).merge(
-                    mut_raw,
-                    on=["chr", "position"],
-                    how="left",
-                    validate="one_to_one",
-                )
-
-                missing_raw = int(
-                    merged[["wt_rate", "mut_rate"]].isna().any(axis=1).sum()
-                )
-                if missing_raw:
-                    examples = merged.loc[
-                        merged[["wt_rate", "mut_rate"]].isna().any(axis=1),
-                        ["chr", "position"],
-                    ].head().to_dict("records")
-                    raise RuntimeError(
-                        f"{fdr_file}: {missing_raw} FDR sites in the original WT/MUT inputs "
-                        f"could not be matched,examples={examples}"
-                    )
-
-                merged["signed_methdiff_raw"] = (
-                    merged["mut_rate"] - merged["wt_rate"]
-                )
-                merged["change"] = (
-                    merged["signed_methdiff_raw"] > 0
-                ).astype(int)
-                merged["q_pass"] = (
-                    merged["qvalue"] <= merged["qthreshold"]
-                )
-                merged["methdiff_pass"] = (
-                    merged["abs_methdiff_fdr"] >= meth_diff_threshold
-                )
-                merged["pair_dmp"] = (
-                    merged["q_pass"] & merged["methdiff_pass"]
-                )
-
-                # Remove the preliminary partition before writing the final one.
-                for pattern in (
-                    "DMP_wt_replicate*_mut_replicate*_Chr*.txt",
-                    "N-DMP_wt_replicate*_mut_replicate*_Chr*.txt",
-                    "hyper_DMP_wt_replicate*_mut_replicate*_Chr*.txt",
-                    "hypo_DMP_wt_replicate*_mut_replicate*_Chr*.txt",
-                ):
-                    for old_file in ctx_dir.glob(pattern):
-                        old_file.unlink()
-
-                total_dmp = 0
-                total_ndmp = 0
-                total_hyper = 0
-                total_hypo = 0
-
-                def _write_partition(path: Path, part: pd.DataFrame):
-                    with path.open("w", encoding="utf-8") as handle:
-                        handle.write("first line\n")
-                        for row in part.itertuples(index=False):
-                            handle.write(
-                                f"{int(row.position)} {float(row.qvalue):.12g} "
-                                f"{int(row.change)}\n"
-                            )
-
-                for chrom, chrom_df in merged.groupby("chr", sort=True):
-                    chrom_df = chrom_df.sort_values("position")
-                    dmp = chrom_df[chrom_df["pair_dmp"]].copy()
-                    ndmp = chrom_df[~chrom_df["pair_dmp"]].copy()
-                    hyper = dmp[dmp["change"] == 1].copy()
-                    hypo = dmp[dmp["change"] == 0].copy()
-
-                    prefix = (
-                        f"wt_replicate{wt_idx}_mut_replicate{mut_idx}_"
-                        f"Chr{chrom}.txt"
-                    )
-                    _write_partition(ctx_dir / f"DMP_{prefix}", dmp)
-                    _write_partition(ctx_dir / f"N-DMP_{prefix}", ndmp)
-                    _write_partition(ctx_dir / f"hyper_DMP_{prefix}", hyper)
-                    _write_partition(ctx_dir / f"hypo_DMP_{prefix}", hypo)
-
-                    total_dmp += len(dmp)
-                    total_ndmp += len(ndmp)
-                    total_hyper += len(hyper)
-                    total_hypo += len(hypo)
-
-                if total_dmp + total_ndmp != len(merged):
-                    raise RuntimeError(
-                        f"wt{wt_idx}-mut{mut_idx} {ctx}: DMP+N-DMP "
-                        f"({total_dmp}+{total_ndmp}) != FDR rows ({len(merged)})"
-                    )
-
-                summary_records.append({
-                    "context": ctx,
-                    "wt_replicate": wt_idx,
-                    "mut_replicate": mut_idx,
-                    "fdr_rows": int(len(merged)),
-                    "q_pass_count": int(merged["q_pass"].sum()),
-                    "methdiff_pass_count": int(
-                        merged["methdiff_pass"].sum()
-                    ),
-                    "pair_dmp_count": int(total_dmp),
-                    "pair_ndmp_count": int(total_ndmp),
-                    "hyper_count": int(total_hyper),
-                    "hypo_count": int(total_hypo),
-                    "q_threshold_source": threshold_source,
-                    "meth_diff_threshold_used": meth_diff_threshold,
-                    "wt_file": wt_file.name,
-                    "mut_file": mut_file.name,
-                    "status": "ok",
-                })
-                print(
-                    f"  [OK] wt{wt_idx}-mut{mut_idx} {ctx}: "
-                    f"DMP={total_dmp}, N-DMP={total_ndmp}"
-                )
-
-    summary = pd.DataFrame(summary_records)
-    summary_dir = work_path / "and_output" / "auto_methdiff_thresholds"
-    summary_dir.mkdir(parents=True, exist_ok=True)
-    summary_file = summary_dir / "pair_dmp_regeneration_summary.tsv"
-    summary.to_csv(summary_file, sep="\t", index=False)
-    print(f"pairwise DMPrebuild summary tablesaved to: {summary_file}")
-    return summary
 
 # Integrate this function into process_replicate_pair
 def process_replicate_pair(replicate_x, replicate_y, files1, files2, dir1, dir2, dir1_name, dir2_name, unfilter_mtypes, work_dir=".", meth_diff_threshold=0.0, skip_dmr=False, skip_window=False):
@@ -7294,8 +6612,26 @@ def convert_chromosome_to_names(chr_series, work_dir="."):
     return converted_count
 
 
+
+def parse_ratio_0_1(value):
+    """Parse a ratio in [0, 1]. Accepts decimal values such as 0.6667 and fractions such as 2/3."""
+    text = str(value).strip()
+    try:
+        if "/" in text:
+            numerator, denominator = text.split("/", 1)
+            result = float(numerator.strip()) / float(denominator.strip())
+        else:
+            result = float(text)
+    except Exception as exc:
+        raise argparse.ArgumentTypeError(f"Invalid ratio: {value}. Use a decimal such as 0.6667 or a fraction such as 2/3.") from exc
+
+    if not (0 <= result <= 1):
+        raise argparse.ArgumentTypeError(f"Ratio must be in [0, 1], got {value}.")
+    return result
+
+
 def main():
-    global DMR_QVALUE_THRESHOLD, VOTE_THRESHOLD, DMR_ENGINE
+    global DMR_QVALUE_THRESHOLD, DMR_METH_DIFF_THRESHOLD, VOTE_THRESHOLD, DMR_ENGINE
     global AUTO_DMP_VOTE_THRESHOLD, AUTO_DMR_VOTE_THRESHOLD, AUTO_VOTE_THRESHOLD_REPORT_ONLY
     global AUTO_DMP_VOTE_THRESHOLDS, AUTO_DMR_VOTE_THRESHOLDS
     global AUTO_QVALUE_TWOSTEP, AUTO_QVALUE_REPORT_ONLY
@@ -7315,44 +6651,24 @@ def main():
     parser.add_argument("biotype_pos", type=int, nargs="?", choices=[0, 1, 2], help=argparse.SUPPRESS)
 
     # ===== New named arguments:python script.py --n 2 --m 2 --dir2 wt --dir1 mut --biotype 0 =====
-    parser.add_argument("--wt-reps", dest="n_opt", metavar="WT_REPS", type=int, help="control group / wild-type replicate count")
-    parser.add_argument("--mut-reps", dest="m_opt", metavar="MUT_REPS", type=int, help="experimental group / mutant replicate count")
-    parser.add_argument("--dir-wt", dest="dir2_opt", metavar="DIR_WT", help="control group / wild-type sample directory")
-    parser.add_argument("--dir-mut", dest="dir1_opt", metavar="DIR_MUT", help="experimental group / mutant sample directory")
+    parser.add_argument("--wt-reps", dest="n_opt", metavar="N_WT", type=int, help="Number of biological replicates in the control / wild-type group")
+    parser.add_argument("--mut-reps", dest="m_opt", metavar="N_MUT", type=int, help="Number of biological replicates in the experimental / mutant group")
+    parser.add_argument("--dir-wt", dest="dir2_opt", metavar="DIR_WT", help="Control / wild-type sample directory")
+    parser.add_argument("--dir-mut", dest="dir1_opt", metavar="DIR_MUT", help="Treatment / mutant sample directory")
     parser.add_argument("--biotype", dest="biotype_opt", metavar="BIOTYPE", type=int, choices=[0, 1, 2], help="0=animal, 1=plant, 2=no filtering")
     parser.add_argument(
-        "--meth-diff",
+        "--methy-diff-dmp",
+        dest="methy_diff_dmp",
         type=float,
         default=0.0,
         help="Minimum absolute methylation difference required for final DMP filtering, in the range 0-1; for example, 0.25 means 25%%. Default: 0.0 for backward compatibility."
     )
     parser.add_argument(
-        "--auto-meth-diff",
-        action="store_true",
-        help="Enable mianjifa auto-methdiff. After pairwise FDR correction, estimate one global threshold from the raw MethDiff distribution of q-significant sites before MethDiff filtering. The estimated threshold is also used for auto-vote support construction and final common-DMP calling. Disabled by default."
-    )
-    parser.add_argument(
-        "--auto-meth-diff-report-only",
-        action="store_true",
-        help="Only output mianjifa auto-methdiff diagnostic tables and distribution plots; do not change the actual DMP calling threshold. Disabled by default."
-    )
-    parser.add_argument(
-        "--auto-meth-diff-cut-percent",
+        "--meth-diff",
+        dest="methy_diff_dmp",
         type=float,
-        default=0.05,
-        help="Histogram area fraction cut outward from zero for mianjifa auto-methdiff. Default: 0.05."
-    )
-    parser.add_argument(
-        "--auto-meth-diff-fallback",
-        type=float,
-        default=0.3,
-        help="Fallback MethDiff threshold used when mianjifa auto-methdiff estimation fails. Default: 0.3."
-    )
-    parser.add_argument(
-        "--auto-meth-diff-aggregate",
-        choices=["median", "mean", "max", "min"],
-        default="median",
-        help="Method for aggregating left/right thresholds across comparisons into one global abs(MethDiff) threshold. Default: median."
+        default=argparse.SUPPRESS,
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--q-cpg",
@@ -7377,6 +6693,20 @@ def main():
         type=float,
         default=DMR_QVALUE_THRESHOLD,
         help="DMR q-value threshold, in the range 0-1. Default: use the original code threshold."
+    )
+    parser.add_argument(
+        "--methy-diff-dmr",
+        dest="methy_diff_dmr",
+        type=float,
+        default=DMR_METH_DIFF_THRESHOLD,
+        help="Minimum absolute regional methylation difference required for each pairwise DMR support, in the range 0-1. It is calculated from aggregated methylated/unmethylated reads within the region. Default: 0.0 for backward compatibility."
+    )
+    parser.add_argument(
+        "--dmr-meth-diff",
+        dest="methy_diff_dmr",
+        type=float,
+        default=argparse.SUPPRESS,
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--auto-qvalue-twostep",
@@ -7413,7 +6743,7 @@ def main():
     )
     parser.add_argument(
         "--vote-threshold",
-        type=float,
+        type=parse_ratio_0_1,
         default=VOTE_THRESHOLD,
         help="Final DMP/DMR voting threshold across replicate combinations, in the range (0,1]. Default: 0.6667, i.e. the original 2/3 rule."
     )
@@ -7493,16 +6823,17 @@ def main():
     dir1 = args.dir1
     dir2 = args.dir2
     biotype = args.biotype
-    meth_diff_threshold = args.meth_diff
+    meth_diff_threshold = args.methy_diff_dmp
+    dmr_meth_diff_threshold = args.methy_diff_dmr
 
     numeric_thresholds = {
-        "--meth-diff": meth_diff_threshold,
+        "--methy-diff-dmp": meth_diff_threshold,
+        "--methy-diff-dmr": dmr_meth_diff_threshold,
         "--q-cpg": args.q_cpg,
         "--q-chg": args.q_chg,
         "--q-chh": args.q_chh,
         "--dmr-q": args.dmr_q,
         "--auto-qvalue-p-cutoff": args.auto_qvalue_p_cutoff,
-        "--auto-meth-diff-fallback": args.auto_meth_diff_fallback,
         "--dmp-lowdiff-cutoff": args.dmp_lowdiff_cutoff,
     }
     for name, value in numeric_thresholds.items():
@@ -7511,9 +6842,6 @@ def main():
             sys.exit(1)
     if not 0 < args.vote_threshold <= 1:
         print("ERROR: --vote-threshold must be in (0, 1] range, for example 0.667 means 2/3majority voting")
-        sys.exit(1)
-    if not 0 < args.auto_meth_diff_cut_percent < 1:
-        print("ERROR: --auto-meth-diff-cut-percent must be in (0, 1) range, for example 0.05")
         sys.exit(1)
     if args.threads < 1:
         print("ERROR: --threads must be >= 1 integer")
@@ -7530,6 +6858,7 @@ def main():
     DMP_QVALUE_THRESHOLDS["CHG"] = args.q_chg
     DMP_QVALUE_THRESHOLDS["CHH"] = args.q_chh
     DMR_QVALUE_THRESHOLD = args.dmr_q
+    DMR_METH_DIFF_THRESHOLD = args.methy_diff_dmr
     VOTE_THRESHOLD = args.vote_threshold
     AUTO_DMP_VOTE_THRESHOLD = args.auto_dmp_vote_threshold
     AUTO_DMR_VOTE_THRESHOLD = args.auto_dmr_vote_threshold
@@ -7561,20 +6890,16 @@ def main():
     print(f"wild-type directory: {dir2} (containing {n} replicate files)")
     print(f"DMP methylation-difference threshold: {meth_diff_threshold} ({meth_diff_threshold * 100:.1f}%)")
     print(
-        "mianjifa auto-methdiff: "
-        f"enabled for calling={args.auto_meth_diff}, "
-        f"report-only={args.auto_meth_diff_report_only}, "
-        f"cut_percent={args.auto_meth_diff_cut_percent}, "
-        f"aggregate={args.auto_meth_diff_aggregate}, "
-        f"fallback={args.auto_meth_diff_fallback}"
-    )
-    print(
         "DMP q-value threshold: "
         f"CpG={DMP_QVALUE_THRESHOLDS['CpG']}, "
         f"CHG={DMP_QVALUE_THRESHOLDS['CHG']}, "
         f"CHH={DMP_QVALUE_THRESHOLDS['CHH']}"
     )
     print(f"DMR q-value threshold: {DMR_QVALUE_THRESHOLD}")
+    print(
+        f"DMR regional methylation-difference threshold: {DMR_METH_DIFF_THRESHOLD} "
+        f"({DMR_METH_DIFF_THRESHOLD * 100:.1f}%)"
+    )
     print(
         "two-step auto q-value threshold: "
         f"enabled for calling={AUTO_QVALUE_TWOSTEP}, "
@@ -7599,7 +6924,7 @@ def main():
     if (DMP_LOWDIFF_STRICT_VOTE or DMP_LOWDIFF_STRICT_VOTE_REPORT_ONLY) and meth_diff_threshold > 0:
         print(
             "Note: --dmp-lowdiff-strict-vote is final DMP post-processing;"
-            f"current --meth-diff={meth_diff_threshold:.6g} will first filter at the pair-support layer,"
+            f"current --methy-diff-dmp={meth_diff_threshold:.6g} will first filter at the pair-support layer,"
             "lowdiff strict vote will then be applied on top of those results."
         )
     print(f"skip DMR analysis: {args.skip_dmr}")
@@ -7637,43 +6962,6 @@ def main():
                 n=n,
                 unfilter_mtypes=unfilter_mtypes
             )
-
-        if args.auto_meth_diff or args.auto_meth_diff_report_only:
-            print(
-                "\nNote:mianjifa auto-methdiff reads q-significant sites from the complete pairwise FDR tables,"
-                "does not use previouslyMethDiff-filtered DMP files; the estimated threshold will continue to be used for "
-                "auto-vote support construction and final common-DMP calling."
-            )
-            auto_methdiff_threshold, auto_methdiff_summary = estimate_mianjifa_auto_methdiff_threshold(
-                mut_dir=dir1,
-                wt_dir=dir2,
-                work_dir=".",
-                cut_fraction=args.auto_meth_diff_cut_percent,
-                fallback=args.auto_meth_diff_fallback,
-                aggregate=args.auto_meth_diff_aggregate,
-                output_dir=os.path.join(".", "and_output", "auto_methdiff_thresholds"),
-                report_only=args.auto_meth_diff_report_only
-            )
-            if args.auto_meth_diff and not args.auto_meth_diff_report_only:
-                meth_diff_threshold = auto_methdiff_threshold
-                print(
-                    "Enable mianjifa auto-methdiff: auto-vote and final common DMP "
-                    f"uniformly using methdiff threshold = {meth_diff_threshold:.6g}"
-                )
-                regenerate_pair_dmp_outputs_from_fdr(
-                    m=m,
-                    n=n,
-                    dir1=dir1,
-                    dir2=dir2,
-                    work_dir=".",
-                    meth_diff_threshold=meth_diff_threshold,
-                    contexts=("CpG", "CHH", "CHG"),
-                )
-            else:
-                print(
-                    f"mianjifa auto-methdiff report-only:estimated threshold = {auto_methdiff_threshold:.6g};"
-                    f"actually still using --meth-diff = {meth_diff_threshold:.6g}"
-                )
 
         methylation_types = ['CpG', 'CHH', 'CHG']
         if AUTO_DMP_VOTE_THRESHOLD or AUTO_VOTE_THRESHOLD_REPORT_ONLY:
