@@ -316,10 +316,8 @@ The legacy `--meth-diff` and `--dmr-meth-diff` names are retained internally as 
 | :--- | :--- | :--- |
 | `--vote-threshold` | `0.6667` | Fixed support proportion used for final DMP and DMR voting. Fractions such as `2/3` are accepted. This value is also used as the fallback when automatic voting cannot produce a valid threshold. |
 | `--auto-qvalue-twostep` | disabled | Estimate the DMP q-value threshold for contexts using two-step FDR correction. |
-| `--auto-qvalue-report-only` | disabled | Generate auto-q-value diagnostic outputs without changing DMP calling thresholds. |
 | `--auto-dmp-vote-threshold` | disabled | Automatically estimate the integer support count required for final DMP calling. |
 | `--auto-dmr-vote-threshold` | disabled | Automatically estimate the integer support count required for final DMR calling. |
-| `--auto-vote-threshold-report-only` | disabled | Generate automatic voting diagnostics without changing the final DMP or DMR voting requirements. |
 
 If an automatic DMP or DMR voting model raises an exception during fitting or threshold calculation, MultiDMPcaller falls back to the value specified by `--vote-threshold`. If the parameter is not explicitly supplied, the default two-thirds rule is used.
 
@@ -329,7 +327,6 @@ If an automatic DMP or DMR voting model raises an exception during fitting or th
 | :--- | :--- | :--- |
 | `--dmp-lowdiff-strict-vote` | disabled | Apply an additional strict-voting rule to provisional final DMPs with relatively small boundary methylation differences. |
 | `--dmp-lowdiff-cutoff` | `0.3` | Boundary absolute MethDiff cutoff used to identify provisional DMPs that require stricter voting. |
-| `--dmp-lowdiff-strict-vote-report-only` | disabled | Generate diagnostic tables for the strict-voting module without changing the final DMP output. |
 
 The hard DMP filter specified by `--methy-diff-dmp` is applied first at the pairwise-support level. Low-difference strict voting is then applied to the remaining provisional DMPs after the ordinary q-value and voting procedure.
 
