@@ -6,21 +6,13 @@ This page answers common questions about installing, running, and interpreting r
 
 ### Q1. What is MultiDMPcaller used for?
 
-MultiDMPcaller is a downstream DNA methylation analysis tool for detecting and visualizing differentially methylated positions (DMPs) and differentially methylated regions (DMRs) between two biological groups, such as a control/wild-type group and an experimental/mutant group.
+MultiDMPcaller is a downstream DNA methylation analysis tool for detecting and visualizing differentially methylated positions (DMPs) and differentially methylated regions (DMRs) between two biological groups.
 
-It supports the three major cytosine methylation contexts:
-
-- CpG
-- CHG
-- CHH
-
-It also performs replicate-aware analysis by conducting all pairwise comparisons between the two groups and then applying a voting strategy to identify final DMPs and DMRs.
+It supports CpG, CHG, and CHH contexts and performs all pairwise comparisons between the two groups before applying final support voting.
 
 ### Q2. Can MultiDMPcaller detect both DMPs and DMRs?
 
-Yes. MultiDMPcaller reports both site-level DMPs and region-level DMRs.
-
-The main final output files are saved in the `and_output/` directory:
+Yes. Main final outputs are written to `and_output/`:
 
 ```text
 and_output/{context}-final_significant_sites_DMPs.txt
@@ -29,64 +21,33 @@ and_output/{context}-final_significant_regions_DMRs.txt
 and_output/{context}-final_significant_regions_DMRs.csv
 ```
 
-For example:
-
-```text
-and_output/CpG-final_significant_sites_DMPs.txt
-and_output/CHG-final_significant_sites_DMPs.txt
-and_output/CHH-final_significant_sites_DMPs.txt
-and_output/CpG-final_significant_regions_DMRs.txt
-```
-
 ### Q3. Does MultiDMPcaller support plant and animal methylomes?
 
-Yes. MultiDMPcaller supports both plant and animal methylome data.
-
-Use the `--biotype` parameter to specify the organism/data mode:
+Yes:
 
 ```text
-0 = animal
-1 = plant
-2 = no p-value prefiltering for all contexts
+--biotype 0    animal
+--biotype 1    plant
+--biotype 2    no p-value prefiltering for any context
 ```
-
-In general:
-
-- Use `--biotype 0` for animal WGBS data.
-- Use `--biotype 1` for plant WGBS data.
-- Use `--biotype 2` when no p-value prefiltering is desired for all contexts.
 
 ## Input format
 
 ### Q4. What is the required input format?
 
-Each input file should be a plain text file without a header. Each row should contain five whitespace- or tab-separated columns:
+Each replicate file must be a headerless plain-text file with five whitespace- or tab-separated columns:
 
 ```text
 Chromosome    Position    Methylated_reads    Unmethylated_reads    Context
 ```
 
-Example:
+### Q5. What values are allowed in the read-count columns?
 
-```text
-chr1    1005    23    5     CpG
-chr1    1030    18    9     CHH
-chr2    5002    7     32    CHG
-```
+Columns 3 and 4 must be non-negative integers. Missing values, negative values, and decimal counts are not valid.
 
-### Q5. Can I include a header line in the input file?
+### Q6. What methylation-context labels are accepted?
 
-No. The current input format expects no header line. If your file has a header, remove it before running MultiDMPcaller.
-
-For example:
-
-```bash
-tail -n +2 original_file.txt > no_header_file.txt
-```
-
-### Q6. What methylation context labels are accepted?
-
-The recommended context labels are:
+Recommended labels are:
 
 ```text
 CpG
@@ -94,35 +55,25 @@ CHG
 CHH
 ```
 
-The program also normalizes common CpG/CG-style labels where applicable. However, for clarity and reproducibility, we recommend using `CpG`, `CHG`, and `CHH` consistently in all input files.
+Common `CG`-style labels are normalized to `CpG` where applicable.
 
-### Q7. Do I need to split input files by methylation context?
+### Q7. Do I need separate files for CpG, CHG, and CHH?
 
-No. You can provide one input file per replicate containing CpG, CHG, and CHH sites together. MultiDMPcaller automatically processes the three methylation contexts separately.
+No. One replicate file can contain all three contexts.
 
-### Q8. Should chromosome names be written as `1` or `chr1`?
+### Q8. Should input files be sorted?
 
-Both styles can be used. Chromosome labels such as `1`, `chr1`, and `Chr1` are normalized internally.
-
-However, it is still recommended to use a consistent chromosome naming style across all replicates to reduce confusion during downstream interpretation.
+Sorting by chromosome and genomic position is recommended for consistent file organization and easier manual inspection.
 
 ### Q9. Can I use Bismark output directly?
 
-Usually not directly. MultiDMPcaller requires five columns:
-
-```text
-Chromosome    Position    Methylated_reads    Unmethylated_reads    Context
-```
-
-If your upstream tool outputs a different format, convert it to the required five-column format before running MultiDMPcaller.
+Usually not without conversion. Convert the upstream output to the required five-column format first.
 
 ## Directory and file naming
 
 ### Q10. What directory structure is required?
 
-Input files should be placed in two directories: one for the control/wild-type group and one for the experimental/mutant group.
-
-Example for a 2 vs 2 comparison:
+Example for a 2 × 2 analysis:
 
 ```text
 MultiDMPcaller/
@@ -137,57 +88,30 @@ MultiDMPcaller/
 
 ### Q11. What are the file naming rules?
 
-For each group directory, replicate files should follow this pattern:
+Use:
 
 ```text
 {replicate_index}-{directory_name}.txt
 ```
 
-Examples:
+Replicate indices must start from `1` and be consecutive.
 
-```text
-1-wt.txt
-2-wt.txt
-1-mut.txt
-2-mut.txt
-```
+### Q12. Can I use different input-directory names?
 
-Replicate indices should start from 1 and be consecutive.
-
-### Q12. Can I use different names for the input directories?
-
-Yes, but the file suffix must match the directory name.
-
-For example, if your wild-type directory is named `control`, the files should be named:
+Yes, but each file suffix must match its directory name. For example:
 
 ```text
 control/1-control.txt
 control/2-control.txt
-```
-
-If your mutant directory is named `treated`, the files should be named:
-
-```text
 treated/1-treated.txt
 treated/2-treated.txt
-```
-
-Then run:
-
-```bash
-python MultiDMPcaller.py \
-  --wt-reps 2 \
-  --mut-reps 2 \
-  --dir-wt control \
-  --dir-mut treated \
-  --biotype 1
 ```
 
 ## Command-line usage
 
 ### Q13. What is the recommended basic command?
 
-For a 2 vs 2 plant WGBS dataset:
+Plant example:
 
 ```bash
 python MultiDMPcaller.py \
@@ -198,7 +122,7 @@ python MultiDMPcaller.py \
   --biotype 1
 ```
 
-For a 2 vs 2 animal WGBS dataset:
+Animal example:
 
 ```bash
 python MultiDMPcaller.py \
@@ -211,47 +135,17 @@ python MultiDMPcaller.py \
 
 ### Q14. What do `--wt-reps` and `--mut-reps` mean?
 
-`--wt-reps` specifies the number of control/wild-type replicates.
+They specify the numbers of control/wild-type and experimental/mutant biological replicates.
 
-`--mut-reps` specifies the number of experimental/mutant replicates.
+### Q15. What is the direction of methylation change?
 
-For example, if you have:
-
-```text
-wt/1-wt.txt
-wt/2-wt.txt
-mut/1-mut.txt
-mut/2-mut.txt
-mut/3-mut.txt
-```
-
-then use:
-
-```bash
---wt-reps 2 --mut-reps 3
-```
-
-### Q15. What is the difference between `--dir-wt` and `--dir-mut`?
-
-`--dir-wt` points to the directory containing control/wild-type samples.
-
-`--dir-mut` points to the directory containing experimental/mutant samples.
-
-The direction of methylation change in the output is interpreted relative to the experimental/mutant group versus the control/wild-type group.
+Output direction is interpreted as experimental/mutant relative to control/wild-type. In final DMP and DMR tables, `1` indicates higher methylation in the experimental/mutant group and `0` indicates lower methylation.
 
 ## Parameter selection
 
 ### Q16. What do `--q-cpg`, `--q-chg`, and `--q-chh` mean?
 
-These parameters define DMP q-value thresholds for different methylation contexts:
-
-```text
---q-cpg    DMP q-value threshold for CpG sites
---q-chg    DMP q-value threshold for CHG sites
---q-chh    DMP q-value threshold for CHH sites
-```
-
-Default values:
+They are fixed DMP q-value thresholds. Defaults are:
 
 ```text
 --q-cpg 0.05
@@ -261,205 +155,214 @@ Default values:
 
 ### Q17. What does `--dmr-q` mean?
 
-`--dmr-q` specifies the q-value threshold for DMR calling.
-
-Default:
+It specifies the q-value threshold for each pairwise DMR comparison. The default is:
 
 ```text
 --dmr-q 0.05
 ```
 
-### Q18. What does `--meth-diff` mean?
+### Q18. What does `--methy-diff-dmp` mean?
 
-`--meth-diff` specifies an optional hard absolute methylation-difference filter for final DMP calling.
-
-For example:
+It specifies the minimum absolute site-level methylation difference required for a pairwise comparison to contribute DMP support.
 
 ```bash
---meth-diff 0.2
+--methy-diff-dmp 0.2
 ```
 
-means that a site must have at least a 0.2 absolute methylation-level difference, corresponding to 20 percentage points, to be retained as a final DMP.
+means 20 percentage points. The default is `0.0`.
 
-### Q19. What does `--vote-threshold` mean?
+### Q19. What does `--methy-diff-dmr` mean?
 
-MultiDMPcaller performs all pairwise comparisons between control and experimental replicates. For `m` control replicates and `n` experimental replicates, there are `m × n` pairwise comparisons.
-
-The final DMPs and DMRs are selected using a support/voting rule across these pairwise comparisons.
-
-For example:
+It specifies the minimum absolute regional methylation difference required for each pairwise DMR support.
 
 ```bash
---vote-threshold 0.6666666666666666
+--methy-diff-dmr 0.2
 ```
 
-corresponds to an approximately two-thirds majority rule.
+means 20 percentage points. The regional difference is calculated from aggregated methylated and unmethylated read counts within the candidate region. The default is `0.0`.
 
-### Q20. What does `--auto-qvalue-twostep` do?
+### Q20. What does `--vote-threshold` mean?
 
-`--auto-qvalue-twostep` enables adaptive q-value threshold estimation for two-step FDR contexts.
+It defines the support proportion required across all `m × n` pairwise comparisons.
 
-This option is intended to make q-value threshold selection more data-adaptive in applicable contexts.
+```bash
+--vote-threshold 2/3
+```
 
-### Q21. What do `--auto-dmp-vote-threshold` and `--auto-dmr-vote-threshold` do?
+corresponds to the default two-thirds rule. Decimal values are also accepted.
 
-These options automatically estimate final voting requirements across replicate comparisons:
+### Q21. What does `--auto-qvalue-twostep` do?
+
+It estimates a data-adaptive DMP q-value threshold for contexts using two-step FDR correction.
+
+
+### Q22. What do the automatic voting options do?
 
 ```text
---auto-dmp-vote-threshold    Automatically estimate the final DMP voting requirement.
---auto-dmr-vote-threshold    Automatically estimate the final DMR voting requirement.
+--auto-dmp-vote-threshold
+--auto-dmr-vote-threshold
 ```
 
-### Q22. What is low-difference strict voting?
+automatically estimate the integer support counts required for final DMP and DMR calling.
 
-Low-difference strict voting is an optional post-filter for final DMP candidates with relatively small methylation differences.
 
-Relevant parameters:
+### Q23. What happens if GMM-based automatic voting fails?
+
+If fitting or threshold calculation raises an exception, MultiDMPcaller falls back to the support requirement implied by `--vote-threshold`. If the parameter is not supplied, the default two-thirds rule is used.
+
+A convergence warning alone does not necessarily trigger fallback.
+
+### Q24. What is low-difference strict voting?
+
+It is an optional post-voting rule for provisional final DMPs with relatively small boundary methylation differences.
+
+Relevant options are:
 
 ```text
 --dmp-lowdiff-strict-vote
 --dmp-lowdiff-cutoff
 ```
 
-The cutoff defines the boundary absolute MethDiff used to identify low-difference candidates. For example:
+The default cutoff is `0.3`.
 
-```bash
---dmp-lowdiff-cutoff 0.3
-```
+### Q25. What is the difference between `--methy-diff-dmp` and `--dmp-lowdiff-cutoff`?
 
-### Q23. When should I use `--dmr-engine cpp`?
+`--methy-diff-dmp` is a hard filter applied at the pairwise-support layer. `--dmp-lowdiff-cutoff` is used later to identify provisional final DMPs that require stricter voting.
 
-Use `--dmr-engine cpp` when the accelerated C++ DMR engine is available.
+## DMR engine and performance
 
-Before using it, make sure the two executable files are in the same directory as the main Python script:
+### Q26. When should I use `--dmr-engine cpp`?
+
+Use it when compatible C++ executables are available. The repository includes:
 
 ```text
 dmr_step1
 dmr_step2_dynamic
+dmr_step1.cpp
+dmr_step2_dynamic.cpp
 ```
 
-On Linux or macOS, make them executable:
+On Linux or macOS, the supplied executables can be made executable with:
 
 ```bash
 chmod +x dmr_step1 dmr_step2_dynamic
 ```
 
-If the C++ engine is unavailable or you want maximum compatibility, use the default Python DMR engine.
+On Windows, compile the source files and add the directory containing `dmr_step1.exe` and `dmr_step2_dynamic.exe` to `PATH`.
 
-### Q24. When should I use `--skip-dmr`?
-
-Use `--skip-dmr` when you only need DMP outputs or when you want to perform a quick DMP-only test.
-
-Example:
+The default engine is:
 
 ```bash
-python MultiDMPcaller.py \
-  --wt-reps 2 \
-  --mut-reps 2 \
-  --dir-wt wt \
-  --dir-mut mut \
-  --biotype 1 \
-  --skip-dmr
+--dmr-engine python
 ```
 
-### Q25. When should I use `--skip-window`?
+### Q27. What does `--threads` control?
 
-Use `--skip-window` when you want to skip sliding-window visualization and only generate table outputs.
+It controls safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. The preprocessing worker count cannot exceed the number of replicate files.
 
-This can reduce runtime for large datasets.
+Start with `2` to `4` workers and increase only when memory and disk-I/O bandwidth are sufficient.
+
+### Q28. How does the low-memory preprocessing work?
+
+It reads raw files in chunks and writes final matrices in row blocks. The preprocessing stage can also use `--threads` for replicate-level parallel conversion.
+
+Optional tuning variables are:
+
+```text
+MULTIDMPCALLER_NEWTOBOTH_CHUNKSIZE
+MULTIDMPCALLER_NEWTOBOTH_BLOCK_ROWS
+```
+
+Most users should keep the defaults.
+
+### Q29. Why must the input directories be writable?
+
+The preprocessing stage writes context-specific matrices and temporary spill files into the input directories. It also needs sufficient free disk space.
+
+### Q30. When should I use `--skip-dmr` or `--skip-window`?
+
+Use `--skip-dmr` for DMP-only analysis or quick testing. Use `--skip-window` when only table outputs are required.
 
 ## Output interpretation
 
-### Q26. Which files contain the final DMP results?
-
-Final DMP results are saved in:
+### Q31. Which files contain final DMP results?
 
 ```text
 and_output/{context}-final_significant_sites_DMPs.txt
 and_output/{context}-final_significant_sites_DMPs.csv
 ```
 
-For example:
-
-```text
-and_output/CpG-final_significant_sites_DMPs.txt
-and_output/CHG-final_significant_sites_DMPs.txt
-and_output/CHH-final_significant_sites_DMPs.txt
-```
-
-### Q27. Which files contain the final DMR results?
-
-Final DMR results are saved in:
+### Q32. Which files contain final DMR results?
 
 ```text
 and_output/{context}-final_significant_regions_DMRs.txt
 and_output/{context}-final_significant_regions_DMRs.csv
 ```
 
-For example:
+### Q33. Why are pairwise results and final results different?
 
-```text
-and_output/CpG-final_significant_regions_DMRs.txt
-```
+Pairwise results come from individual replicate comparisons. Final DMPs and DMRs must satisfy support voting across all pairwise comparisons.
 
-### Q28. What does `Methylation_Change` mean?
+### Q34. Why are my results different from methylKit, DSS, DMRcaller, or another tool?
 
-In the final DMP table, `Methylation_Change` indicates the direction of methylation change.
+Different tools use different statistical models, filtering rules, multiple-testing corrections, replicate strategies, and DMR definitions. Exact one-to-one agreement is not expected.
 
-In typical output interpretation:
+## Web server and data availability
 
-- `1` denotes hyper-methylation in the experimental/mutant group.
-- `0` denotes hypo-methylation in the experimental/mutant group.
+### Q35. Can I use the web server instead of local installation?
 
-### Q29. Why are my results different from methylKit, DSS, DMRcaller, or other tools?
+Yes. The public server is available at:
 
-Different tools use different statistical models, filtering rules, multiple-testing correction strategies, replicate-handling strategies, and DMR definitions. Therefore, exact one-to-one agreement is not expected.
+[https://ciebioinfo.nwafu.edu.cn/](https://ciebioinfo.nwafu.edu.cn/)
 
-MultiDMPcaller uses all pairwise comparisons between the two groups and then applies a final voting strategy, which may retain loci that are consistently supported across replicate comparisons.
+It supports upload, parameter selection, job submission, job-ID-based status queries, visualization, and ZIP result download.
 
-### Q30. Why are pairwise results and final results different?
+### Q36. What are the current web-server limits?
 
-Pairwise results are generated from individual replicate comparisons. Final DMPs/DMRs are selected based on support across all pairwise comparisons. Therefore, a site or region significant in one pairwise comparison may not appear in the final output if it does not meet the required voting/support threshold.
+| Item | Current setting |
+| :--- | :--- |
+| Maximum threads per job | `4` |
+| Maximum concurrent jobs | `4` |
+| Upload limit | No fixed software-level cap |
+| Result retention period | `72 h` |
 
-## Web server
+“No fixed software-level cap” does not imply unlimited upload size. Practical limits can still depend on browser behavior, network conditions, reverse-proxy configuration, available storage, and server resources.
 
-### Q31. Can I use the web server instead of local installation?
+Keep the returned Job ID until the result package has been downloaded.
 
-Yes. A public web server is available at:
+### Q37. Where are the human simulation benchmark datasets available?
 
-```text
-https://ciebioinfo.nwafu.edu.cn/
-```
+They are available from Zenodo:
 
-The web interface supports file upload, parameter selection, job submission, job-ID based status query, result visualization, and ZIP result download.
-
-### Q32. What should I keep after submitting a web-server job?
-
-Keep the returned Job ID. It is required for checking job status and retrieving results later.
+[Human simulation benchmark datasets for MultiDMPcaller](https://zenodo.org/records/21121883)
 
 ## Reproducibility and issue reporting
 
-### Q33. What information should I keep for reproducibility?
+### Q38. What should I keep for reproducibility?
 
-For formal analyses, we recommend keeping:
+Keep:
 
-- The exact command line
-- The software version or GitHub commit hash
-- The input files or their checksums
-- The full `and_output/` directory
-- The full log file
-- Parameter settings
-- Runtime environment information
+- the exact command line;
+- the software version or GitHub commit hash;
+- input checksums;
+- the complete `and_output/` directory;
+- full logs;
+- all threshold settings;
+- operating-system and Python-version information.
 
-### Q34. What information should I include when reporting a problem?
+### Q39. What should I include when reporting a problem?
 
-Please include:
+Include:
 
-- MultiDMPcaller version or GitHub commit hash
-- Full command line
-- Operating system
-- Python version
-- Full error log
-- Input directory structure
-- First 5 lines of representative input files
-- Whether the problem still occurs with `--skip-dmr` or `--skip-window`
+- MultiDMPcaller version or commit hash;
+- full command line;
+- operating system and architecture;
+- Python version;
+- full error log;
+- input directory structure;
+- representative input lines;
+- replicate counts and contexts;
+- available memory and free disk space;
+- whether the problem persists with `--threads 1`;
+- whether it persists with `--skip-dmr` or `--skip-window`;
+- whether the Python or C++ DMR engine was used.
