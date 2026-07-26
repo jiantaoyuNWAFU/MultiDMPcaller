@@ -256,15 +256,15 @@ The default engine is:
 --dmr-engine python
 ```
 
-### Q27. What does `--threads` control?
+### Q27. What does `--processes` control?
 
-It controls safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. The preprocessing worker count cannot exceed the number of replicate files.
+It specifies the maximum number of parallel worker processes used by safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. The actual number of active worker processes may be lower when fewer independent tasks are available.
 
-Start with `2` to `4` workers and increase only when memory and disk-I/O bandwidth are sufficient.
+Start with `2` to `4` worker processes and increase the value only when sufficient memory and disk-I/O bandwidth are available.
 
 ### Q28. How does the low-memory preprocessing work?
 
-It reads raw files in chunks and writes final matrices in row blocks. The preprocessing stage can also use `--threads` for replicate-level parallel conversion.
+It reads raw files in chunks and writes final matrices in row blocks. The preprocessing stage can also use `--processes` for process-based parallel conversion of replicate files.
 
 Optional tuning variables are:
 
@@ -321,7 +321,7 @@ It supports upload, parameter selection, job submission, job-ID-based status que
 
 | Item | Current setting |
 | :--- | :--- |
-| Maximum threads per job | `4` |
+| Maximum worker processes per job | `4` |
 | Maximum concurrent jobs | `4` |
 | Upload limit | No fixed software-level cap |
 | Result retention period | `72 h` |
@@ -363,6 +363,6 @@ Include:
 - representative input lines;
 - replicate counts and contexts;
 - available memory and free disk space;
-- whether the problem persists with `--threads 1`;
+- whether the problem persists with `--processes 1`;
 - whether it persists with `--skip-dmr` or `--skip-window`;
 - whether the Python or C++ DMR engine was used.
