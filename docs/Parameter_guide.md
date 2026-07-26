@@ -252,31 +252,31 @@ The `--methy-diff-dmp` hard filter is applied first at the pairwise-support laye
 
 ## 9. Runtime and workflow control
 
-### `--threads`
+### `--processes`
 
-Number of parallel worker processes.
+Maximum number of parallel worker processes.
 
 Default:
 
 ```bash
---threads 1
+--processes 1
 ```
 
-Safe parallel stages include raw-file conversion, replicate-pair processing, and common DMR aggregation. The actual number of preprocessing workers cannot exceed the number of replicate files.
+Safe parallel stages include raw-file conversion, replicate-pair processing, and common DMR aggregation. The actual number of active worker processes may be lower when fewer independent tasks are available.
 
 Start with:
 
 ```bash
---threads 2
+--processes 2
 ```
 
 or:
 
 ```bash
---threads 4
+--processes 4
 ```
 
-Increasing the value can increase memory use and disk-I/O pressure.
+Increasing the number of worker processes can increase memory use and disk-I/O pressure.
 
 ### `--dmr-engine`
 
@@ -334,7 +334,7 @@ The raw-file conversion stage:
 
 - reads input files in chunks;
 - writes output matrices in row blocks;
-- uses `--threads` for replicate-level parallel conversion.
+- uses `--processes` for process-based parallel conversion of replicate files.
 
 Optional environment variables:
 
@@ -378,7 +378,7 @@ python MultiDMPcaller.py \
   --methy-diff-dmp 0.0 \
   --methy-diff-dmr 0.0 \
   --vote-threshold 2/3 \
-  --threads 4 \
+  --processes 4 \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
@@ -401,7 +401,7 @@ python MultiDMPcaller.py \
   --methy-diff-dmp 0.0 \
   --methy-diff-dmr 0.0 \
   --vote-threshold 2/3 \
-  --threads 4 \
+  --processes 4 \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
@@ -420,7 +420,7 @@ python MultiDMPcaller.py \
   --methy-diff-dmp 0.2 \
   --methy-diff-dmr 0.2 \
   --vote-threshold 0.75 \
-  --threads 4
+  --processes 4
 ```
 
 ### 11.5 Exploratory workflow
@@ -435,7 +435,7 @@ python MultiDMPcaller.py \
   --methy-diff-dmp 0 \
   --methy-diff-dmr 0 \
   --vote-threshold 0.5 \
-  --threads 4
+  --processes 4
 ```
 
 ## 12. Reproducibility checklist
