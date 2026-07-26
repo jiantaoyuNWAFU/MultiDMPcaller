@@ -231,7 +231,7 @@ python MultiDMPcaller.py \
   --methy-diff-dmp 0.0 \
   --methy-diff-dmr 0.0 \
   --vote-threshold 2/3 \
-  --threads 4 \
+  --processes 4 \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
@@ -256,7 +256,7 @@ python MultiDMPcaller.py \
   --methy-diff-dmp 0.0 \
   --methy-diff-dmr 0.0 \
   --vote-threshold 2/3 \
-  --threads 4 \
+  --processes 4 \
   --dmr-engine cpp \
   --auto-qvalue-twostep \
   --auto-dmp-vote-threshold \
@@ -334,7 +334,7 @@ The hard DMP filter specified by `--methy-diff-dmp` is applied first at the pair
 
 | Argument | Default | Meaning |
 | :--- | :--- | :--- |
-| `--threads` | `1` | Number of parallel worker processes used by safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. The actual number of preprocessing workers cannot exceed the number of replicate files. Start with `2`–`4` for ordinary workstations and increase it only when sufficient memory and disk I/O bandwidth are available. |
+| `--processes` | `1` | Maximum number of parallel worker processes used by safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. The actual number of preprocessing workers cannot exceed the number of replicate files. Start with `2`–`4` for ordinary workstations and increase it only when sufficient memory and disk I/O bandwidth are available. |
 | `--dmr-engine` | `python` | DMR candidate-region engine. Use `cpp` after compatible `dmr_step1` and `dmr_step2_dynamic` executables have been prepared. |
 | `--skip-dmr` | disabled | Skip all DMR-related steps. |
 | `--skip-window` | disabled | Skip sliding-window and visualization steps. |
@@ -351,7 +351,7 @@ The current preprocessing implementation:
 - uses a deterministic pure-Python k-way merge;
 - writes final matrices in row blocks;
 - does not depend on the GNU/Linux `sort` command;
-- uses `--threads` directly for replicate-level parallel conversion.
+- uses `--processes` directly for process-based parallel conversion of replicate files.
 
 The implementation is designed to reduce peak memory usage and avoid operating-system-specific sorting commands.
 
@@ -439,7 +439,7 @@ Current service limits:
 
 | Item | Current setting |
 | :--- | :--- |
-| Maximum threads per job | `4` |
+| Maximum worker processes per job | `4` |
 | Maximum concurrent jobs | `4` |
 | Upload limit | No fixed software-level cap |
 | Result retention period | `72 h` |
@@ -465,7 +465,7 @@ Publicly available experimental datasets used in the study are identified by the
 1. Make sure the number of replicate files matches `--wt-reps` and `--mut-reps`.
 2. Make sure directory names match the file suffixes. For example, files inside `wt/` should be named `1-wt.txt`, `2-wt.txt`, and so on.
 3. Use `--biotype 1` for plant WGBS data and `--biotype 0` for animal WGBS data.
-4. For large datasets, start with `--threads 2` to `--threads 4`. Increasing the number of workers can increase memory use and disk-I/O pressure.
+4. For large datasets, start with `--processes 2` to `--processes 4`. Increasing the number of worker processes can increase memory use and disk-I/O pressure.
 5. Use `--dmr-engine cpp` only after compatible C++ executables have been prepared and made discoverable by the program.
 6. Keep log files, command lines, software versions, and the complete `and_output/` directory for reproducibility.
 7. Ensure sufficient free disk space is available before processing whole-genome bisulfite sequencing datasets.
