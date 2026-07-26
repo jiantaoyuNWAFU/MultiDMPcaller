@@ -444,16 +444,16 @@ A convergence warning alone does not necessarily trigger this fallback; the fall
 Large WGBS files can contain tens of millions of sites. Start with:
 
 ```bash
---threads 2
+--processes 2
 ```
 
 or:
 
 ```bash
---threads 4
+--processes 4
 ```
 
-The `--threads` value controls safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. More workers can increase disk-I/O pressure and may not always improve runtime.
+The `--processes` value specifies the maximum number of parallel worker processes used by safe parallel stages, including raw-file conversion, replicate-pair processing, and common DMR aggregation. More worker processes can increase disk-I/O pressure and may not always improve runtime.
 
 Other options include:
 
@@ -470,13 +470,13 @@ Possible causes include insufficient memory, insufficient disk space, excessive 
 Try:
 
 ```bash
---threads 1
+--processes 1
 ```
 
 or:
 
 ```bash
---threads 2
+--processes 2
 ```
 
 The low-memory preprocessing stage can also be tuned with:
@@ -511,7 +511,7 @@ nohup python MultiDMPcaller.py \
   --dir-wt wt \
   --dir-mut mut \
   --biotype 1 \
-  --threads 4 \
+  --processes 4 \
   --dmr-engine cpp \
   > run.log 2>&1 &
 ```
@@ -618,6 +618,6 @@ Please include:
 - first five lines of representative input files;
 - replicate counts and methylation contexts;
 - available memory and free disk space;
-- whether the problem persists with `--threads 1`;
+- whether the problem persists with `--processes 1`;
 - whether it persists with `--skip-dmr` or `--skip-window`;
 - whether the Python or C++ DMR engine was used.
