@@ -454,7 +454,7 @@ The source code, documentation, Python implementation, C++ DMR source files, and
 
 The human simulation benchmark datasets used in the study are available from Zenodo:
 
-[Human simulation benchmark datasets for MultiDMPcaller](https://zenodo.org/records/21121883)
+[Human simulation benchmark datasets for MultiDMPcaller](https://zenodo.org/records/21489519)
 
 Publicly available experimental datasets used in the study are identified by their original database accession numbers in the manuscript and associated benchmark documentation.
 
@@ -477,5 +477,5 @@ Publicly available experimental datasets used in the study are identified by the
 If you use MultiDMPcaller, please cite:
 
 ```text
-Yuan Q#., Zhao H#., Zhang Z#., Yue C., Zhang B., Xue S., Zou Q. and Yu J*. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (accepted).
+Yuan Q#., Zhao H#., Zhang Z#., Yue C., Zhang B., Xue S., Zou Q. and Yu J*. 2026. MultiDMPcaller: A one-stop software for detection and visualization of differentially methylated positions and regions. Bioinformatics (DOI: 10.1093/bioinformatics/btag655).
 ```
